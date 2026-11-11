@@ -11,7 +11,10 @@ import { SpellFilters } from "@/components/spell-filters";
 import { SpellSort } from "@/components/spell-sort";
 import { StatePanel } from "@/components/state-panel";
 import { Button } from "@/components/ui/button";
-import { describeCatalogFailure, type CatalogFailure } from "@/lib/catalog/errors";
+import {
+  describeCatalogFailure,
+  type CatalogFailure,
+} from "@/lib/catalog/errors";
 import { catalogRepository } from "@/lib/catalog/repository";
 import {
   catalogFiltersToSearchParams,
@@ -20,12 +23,15 @@ import {
 } from "@/lib/validation/catalog";
 
 export const metadata: Metadata = {
-  title: "Biblioteca de magias",
+  title: "ARS Arcana — Biblioteca de magias",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-function pageHref(filters: ReturnType<typeof parseCatalogFilters>, page: number): string {
+function pageHref(
+  filters: ReturnType<typeof parseCatalogFilters>,
+  page: number,
+): string {
   const params = catalogFiltersToSearchParams(filters);
   if (page > 1) params.set("page", String(page));
   else params.delete("page");
@@ -34,7 +40,11 @@ function pageHref(filters: ReturnType<typeof parseCatalogFilters>, page: number)
   return query ? `/?${query}` : "/";
 }
 
-export default async function LibraryPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const resolvedSearchParams = await searchParams;
   const filters = parseCatalogFilters(resolvedSearchParams);
   const currentSearch = catalogFiltersToSearchParams(filters).toString();
@@ -53,8 +63,10 @@ export default async function LibraryPage({ searchParams }: { searchParams: Sear
     redirect(pageHref(filters, page.pageCount));
   }
 
-  const rangeStart = page && page.items.length > 0 ? (page.page - 1) * page.pageSize + 1 : 0;
-  const rangeEnd = page && page.items.length > 0 ? rangeStart + page.items.length - 1 : 0;
+  const rangeStart =
+    page && page.items.length > 0 ? (page.page - 1) * page.pageSize + 1 : 0;
+  const rangeEnd =
+    page && page.items.length > 0 ? rangeStart + page.items.length - 1 : 0;
   const retryHref = currentSearch ? `/?${currentSearch}` : "/";
 
   return (
@@ -66,7 +78,10 @@ export default async function LibraryPage({ searchParams }: { searchParams: Sear
       />
 
       <section className="container-page py-8 sm:py-10">
-        <CatalogSearchBar initialQuery={filters.q} currentSearch={currentSearch} />
+        <CatalogSearchBar
+          initialQuery={filters.q}
+          currentSearch={currentSearch}
+        />
 
         {failure ? (
           <div className="mt-8">
@@ -99,8 +114,14 @@ export default async function LibraryPage({ searchParams }: { searchParams: Sear
               <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2.5">
-                    <Library className="size-4 text-gold" strokeWidth={1.6} aria-hidden="true" />
-                    <h2 className="text-[1.9rem] leading-none text-forest">Biblioteca de magias</h2>
+                    <Library
+                      className="size-4 text-gold"
+                      strokeWidth={1.6}
+                      aria-hidden="true"
+                    />
+                    <h2 className="text-[1.9rem] leading-none text-forest">
+                      Biblioteca de magias
+                    </h2>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {page && page.total > 0
@@ -130,7 +151,9 @@ export default async function LibraryPage({ searchParams }: { searchParams: Sear
                     <Pagination
                       currentPage={page.page}
                       pageCount={page.pageCount}
-                      hrefForPage={(targetPage) => pageHref(filters, targetPage)}
+                      hrefForPage={(targetPage) =>
+                        pageHref(filters, targetPage)
+                      }
                     />
                   </div>
                 </>

@@ -17,13 +17,21 @@ import {
 } from "@/components/ui/sheet";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Biblioteca de magias", match: (path: string) => path === "/" },
+  {
+    href: "/",
+    label: "Biblioteca de magias",
+    match: (path: string) => path === "/",
+  },
   {
     href: "/magias-salvas",
     label: "Meus grimórios",
     match: (path: string) => path.startsWith("/magias-salvas"),
   },
-  { href: "/guia", label: "Guia do aventureiro", match: (path: string) => path.startsWith("/guia") },
+  {
+    href: "/guia",
+    label: "Guia do aventureiro",
+    match: (path: string) => path.startsWith("/guia"),
+  },
 ] as const;
 
 function Brand() {
@@ -88,7 +96,11 @@ function SavedShortcut({ mobile = false }: { mobile?: boolean }) {
         mobile ? "w-full justify-start" : ""
       }`}
     >
-      <Bookmark className="size-4 text-gold" strokeWidth={1.7} aria-hidden="true" />
+      <Bookmark
+        className="size-4 text-gold"
+        strokeWidth={1.7}
+        aria-hidden="true"
+      />
       <span>Magias salvas</span>
       <SavedCount className="ml-auto grid min-w-6 place-items-center rounded-sm bg-gold/15 px-1.5 py-0.5 text-xs font-semibold text-gold" />
     </Link>
@@ -126,7 +138,9 @@ export function SiteHeader() {
               className="border-l border-gold/25 bg-forest text-[#f4ecdc] sm:max-w-sm"
             >
               <SheetHeader>
-                <SheetTitle className="font-heading text-2xl text-[#f7f0e0]">ARS ARCANA</SheetTitle>
+                <SheetTitle className="font-heading text-2xl text-[#f7f0e0]">
+                  ARS ARCANA
+                </SheetTitle>
                 <SheetDescription className="text-[#cfc9ba]">
                   Navegue pela biblioteca e pelos seus grimórios.
                 </SheetDescription>
@@ -142,7 +156,9 @@ export function SiteHeader() {
                           onClick={() => setOpen(false)}
                           aria-current={active ? "page" : undefined}
                           className={`flex items-center justify-between rounded-sm px-3 py-3 text-sm transition-colors ${
-                            active ? "bg-white/10 text-gold" : "text-[#e2ddcf] hover:bg-white/5"
+                            active
+                              ? "bg-white/10 text-gold"
+                              : "text-[#e2ddcf] hover:bg-white/5"
                           }`}
                         >
                           {item.label}

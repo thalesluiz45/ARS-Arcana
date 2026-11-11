@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   applicationName: "ARS Arcana",
   title: {
     default: "ARS Arcana — Biblioteca de magias",
-    template: "%s · ARS Arcana",
+    template: "ARS Arcana — %s",
   },
   description:
     "Explore o catálogo completo de magias, salve seus favoritos e organize grimórios para a sua próxima aventura.",
@@ -36,9 +36,16 @@ export const viewport: Viewport = {
   themeColor: "#143d33",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${cormorant.variable} h-full antialiased`}>
+    <html
+      lang="pt-BR"
+      className={`${inter.variable} ${cormorant.variable} h-full antialiased`}
+    >
       <body className="min-h-full">
         <LocalDataProvider>
           <a href="#conteudo" className="skip-link">
