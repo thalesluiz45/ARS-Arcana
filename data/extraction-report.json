@@ -1,0 +1,42 @@
+{
+  "fonte": "references/DnD 5.5 - Magias.pdf",
+  "paginas": 105,
+  "magiasExtraidas": 391,
+  "duplicadasPorNome": {},
+  "duplicadasPorSlug": {},
+  "problemas": [],
+  "circulos": {
+    "0": 34,
+    "1": 64,
+    "2": 63,
+    "3": 52,
+    "4": 41,
+    "5": 48,
+    "6": 34,
+    "7": 21,
+    "8": 18,
+    "9": 16
+  },
+  "escolas": {
+    "Abjuração": 55,
+    "Adivinhação": 33,
+    "Encantamento": 42,
+    "Evocação": 63,
+    "Ilusão": 29,
+    "Invocação": 72,
+    "Necromancia": 31,
+    "Transmutação": 66
+  },
+  "classes": {
+    "Bardo": 140,
+    "Bruxo": 91,
+    "Clérigo": 117,
+    "Druida": 135,
+    "Feiticeiro": 150,
+    "Guardião": 61,
+    "Mago": 242,
+    "Paladino": 51
+  },
+  "semDescricao": 0,
+  "semClasses": 0
+}

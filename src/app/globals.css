@@ -1,0 +1,181 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-forest: var(--forest);
+  --color-forest-deep: var(--forest-deep);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-ivory: var(--ivory);
+  --color-parchment: var(--parchment);
+  --color-ink: var(--ink);
+  --color-sage: var(--sage);
+  --font-sans: var(--font-inter);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-serif: var(--font-cormorant);
+  --font-heading: var(--font-cormorant);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #fbf7ee;
+  --foreground: #22302a;
+  --card: #fffdf7;
+  --card-foreground: #22302a;
+  --popover: #fffdf7;
+  --popover-foreground: #22302a;
+  --primary: #143d33;
+  --primary-foreground: #f8f1df;
+  --secondary: #efe7d7;
+  --secondary-foreground: #2c3b33;
+  --muted: #f1ebdf;
+  --muted-foreground: #6c756d;
+  --accent: #e9ddc4;
+  --accent-foreground: #3d3220;
+  --destructive: #a9362d;
+  --border: #e2d8c4;
+  --input: #d9cdb8;
+  --ring: #b89a5e;
+  --radius: 0.4rem;
+  --forest: #163f35;
+  --forest-deep: #0d3028;
+  --gold: #c8a35a;
+  --gold-soft: #e7d5a7;
+  --ivory: #fbf7ee;
+  --parchment: #f4ecdc;
+  --ink: #22302a;
+  --sage: #dce8df;
+}
+
+.dark {
+  --background: #10251f;
+  --foreground: #f3ecdd;
+  --card: #173129;
+  --card-foreground: #f3ecdd;
+  --popover: #173129;
+  --popover-foreground: #f3ecdd;
+  --primary: #e7d5a7;
+  --primary-foreground: #143d33;
+  --secondary: #234239;
+  --secondary-foreground: #f3ecdd;
+  --muted: #1d3a31;
+  --muted-foreground: #b9c3b8;
+  --accent: #2b4a3f;
+  --accent-foreground: #f3ecdd;
+  --destructive: #e78d85;
+  --border: #315046;
+  --input: #3b5b50;
+  --ring: #c8a35a;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at 14% 12%, rgb(200 163 90 / 0.06), transparent 32rem),
+      radial-gradient(circle at 86% 72%, rgb(22 63 53 / 0.045), transparent 38rem);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading;
+    font-weight: 500;
+  }
+
+  ::selection {
+    background: var(--gold-soft);
+    color: var(--forest-deep);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-[1280px] px-5 sm:px-8;
+  }
+
+  .eyebrow {
+    @apply text-[0.68rem] font-semibold uppercase tracking-[0.24em];
+  }
+
+  .surface-card {
+    @apply rounded-lg border border-border bg-card shadow-[0_1px_0_rgb(255_255_255/0.7)_inset,0_10px_30px_-24px_rgb(34_48_42/0.35)];
+  }
+
+  .search-surface {
+    @apply rounded-lg border border-border bg-card shadow-[0_18px_40px_-34px_rgb(34_48_42/0.45)];
+  }
+
+  .stat-label {
+    @apply text-[0.58rem] font-semibold uppercase tracking-[0.19em] text-muted-foreground;
+  }
+
+  .spell-copy p + p {
+    @apply mt-4;
+  }
+
+  .ornament-line {
+    background: linear-gradient(90deg, transparent, var(--border) 18%, var(--border) 82%, transparent);
+  }
+
+  .skip-link {
+    @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform;
+  }
+
+  .skip-link:focus {
+    @apply translate-y-0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

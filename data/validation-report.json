@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-10",
+  "environment": {
+    "catalog": "PostgreSQL embutido PGlite (.data/catalogo)",
+    "catalogUrl": "http://localhost:3000",
+    "unconfiguredUrl": "http://localhost:3001"
+  },
+  "quality": {
+    "lint": "pass",
+    "typecheck": "pass",
+    "tests": {
+      "files": 4,
+      "tests": 28,
+      "passed": 28
+    },
+    "productionBuild": "pass",
+    "clientBundleSecrets": "no database configuration strings in .next/static"
+  },
+  "catalog": {
+    "sourceSpells": 391,
+    "valid": 391,
+    "invalid": 0,
+    "databaseCount": 391,
+    "missingFromDatabase": 0,
+    "extraInDatabase": 0,
+    "lastImportUpdated": 391
+  },
+  "browser": {
+    "passed": 23,
+    "failed": 0,
+    "pageErrors": 0,
+    "checks": [
+      "Biblioteca carrega catálogo completo e facetas reais",
+      "Busca por Enter atualiza URL e resultados",
+      "Detalhes exibem todos os campos e preservam a origem",
+      "Salvar em Sem grimório funciona sem conta",
+      "Voltar preserva a busca da Biblioteca",
+      "Filtros combinam classe, círculo 0 e escola com contagens reais",
+      "Limpar filtros restaura o catálogo completo",
+      "Ordenação e paginação do servidor funcionam e voltam preservadas",
+      "Magias salvas lista a coleção reservada e cria grimório nomeado",
+      "Mover de Sem grimório para grimório nomeado respeita exclusividade",
+      "Renomear grimório persiste e atualiza a navegação",
+      "Excluir grimório confirma e move a magia para Sem grimório",
+      "Preparar referências locais adicionais para paginação e offline",
+      "Magia fora do catálogo permanece como referência sem snapshot",
+      "Busca local e ordenação por círculo funcionam no conjunto selecionado",
+      "Paginação local preserva o conjunto e mostra o intervalo correto",
+      "Snapshots locais aparecem quando o catálogo está indisponível",
+      "Detalhe usa snapshot local quando a API falha",
+      "ID inválido e UUID inexistente não causam crash",
+      "Layout estreito mantém navegação, filtros e coleção utilizáveis",
+      "Nenhum erro de página ou console inesperado no fluxo",
+      "Falha do IndexedDB mostra erro explícito, não coleção vazia",
+      "Ambiente sem DATABASE_URL mostra catálogo indisponível, não vazio"
+    ]
+  }
+}
