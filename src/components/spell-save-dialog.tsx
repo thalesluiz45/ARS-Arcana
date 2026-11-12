@@ -19,20 +19,20 @@ import { Input } from "@/components/ui/input";
 import { RESERVED_GRIMOIRE_ID } from "@/lib/validation/grimoire";
 import { cn } from "@/lib/utils";
 
-function associationKey(magiaId: string) {
-  return `spell-dialog:${magiaId}`;
+function associationKey(spellId: string) {
+  return `spell-dialog:${spellId}`;
 }
 
 export function SpellSaveDialog({
   open,
   onOpenChange,
-  magiaId,
-  magiaNome,
+  spellId,
+  spellName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  magiaId: string;
-  magiaNome: string;
+  spellId: string;
+  spellName: string;
 }) {
   const {
     status,
@@ -58,12 +58,12 @@ export function SpellSaveDialog({
 
   useEffect(() => {
     if (!open || status !== "ready") return;
-    const current = getIdsRef.current(magiaId);
+    const current = getIdsRef.current(spellId);
     setSelectedIds(new Set(current.filter((id) => id !== RESERVED_GRIMOIRE_ID)));
     setIncludeReserved(current.includes(RESERVED_GRIMOIRE_ID));
     setNewName("");
     setInlineError(null);
-  }, [open, magiaId, status]);
+  }, [open, spellId, status]);
 
   function toggleNamed(id: string) {
     setSelectedIds((previous) => {
@@ -103,23 +103,23 @@ export function SpellSaveDialog({
     setSaving(true);
     setInlineError(null);
     try {
-      await saveSpellSelection(magiaId, {
-        grimorioIds: [...selectedIds],
-        semGrimorio: includeReserved,
+      await saveSpellSelection(spellId, {
+        grimoireIds: [...selectedIds],
+        withoutGrimoire: includeReserved,
       });
       const total = selectedIds.size + (includeReserved ? 1 : 0);
       if (total === 0) {
-        toast.success(`“${magiaNome}” foi removida dos seus grimórios.`);
+        toast.success(`“${spellName}” foi removida dos seus grimórios.`);
       } else if (includeReserved) {
-        toast.success(`“${magiaNome}” foi salva em Sem grimório.`);
+        toast.success(`“${spellName}” foi salva em Sem grimório.`);
       } else {
         const names = grimoires
           .filter((grimoire) => selectedIds.has(grimoire.id))
           .map((grimoire) => grimoire.nome);
         toast.success(
           names.length === 1
-            ? `“${magiaNome}” foi salva em “${names[0]}”.`
-            : `“${magiaNome}” foi salva em ${total} grimórios.`,
+            ? `“${spellName}” foi salva em “${names[0]}”.`
+            : `“${spellName}” foi salva em ${total} grimórios.`,
         );
       }
       onOpenChange(false);
@@ -137,11 +137,11 @@ export function SpellSaveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" data-testid={associationKey(magiaId)}>
+      <DialogContent className="sm:max-w-md" data-testid={associationKey(spellId)}>
         <DialogHeader>
           <DialogTitle className="text-xl">Organizar magia</DialogTitle>
           <DialogDescription>
-            Escolha onde guardar <strong className="font-medium text-foreground">{magiaNome}</strong>.
+            Escolha onde guardar <strong className="font-medium text-foreground">{spellName}</strong>.
             Você pode marcar vários grimórios nomeados.
           </DialogDescription>
         </DialogHeader>
@@ -296,21 +296,21 @@ export function SpellSaveDialog({
 }
 
 export function SpellSaveButton({
-  magiaId,
-  magiaNome,
+  spellId,
+  spellName,
   variant = "icon",
   className,
   ariaLabel,
 }: {
-  magiaId: string;
-  magiaNome: string;
+  spellId: string;
+  spellName: string;
   variant?: "icon" | "labelled";
   className?: string;
   ariaLabel?: string;
 }) {
   const { isSpellSaved } = useLocalData();
   const [open, setOpen] = useState(false);
-  const saved = isSpellSaved(magiaId);
+  const saved = isSpellSaved(spellId);
 
   return (
     <>
@@ -320,7 +320,7 @@ export function SpellSaveButton({
           onClick={() => setOpen(true)}
           aria-label={
             ariaLabel ??
-            (saved ? `Gerenciar grimórios de ${magiaNome}` : `Salvar “${magiaNome}” em um grimório`)
+            (saved ? `Gerenciar grimórios de ${spellName}` : `Salvar “${spellName}” em um grimório`)
           }
           aria-haspopup="dialog"
           className={cn(
@@ -358,8 +358,8 @@ export function SpellSaveButton({
       <SpellSaveDialog
         open={open}
         onOpenChange={setOpen}
-        magiaId={magiaId}
-        magiaNome={magiaNome}
+        spellId={spellId}
+        spellName={spellName}
       />
     </>
   );

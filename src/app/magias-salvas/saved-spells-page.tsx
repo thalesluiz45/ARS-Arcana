@@ -24,32 +24,27 @@ import {
 
 import {
   GrimoireDialogs,
-  GrimoireSidebar,
   type GrimoireDialogState,
-} from "@/components/grimoire-sidebar";
+} from "@/components/grimoire-dialogs";
+import { GrimoireSidebar } from "@/components/grimoire-sidebar";
 import { useLocalData } from "@/components/local-data-provider";
 import { PageHero } from "@/components/page-hero";
 import { Pagination } from "@/components/pagination";
 import { SpellCard, UnavailableSpellCard } from "@/components/spell-card";
 import { SavedSearchBar } from "@/components/spell-search";
 import { SpellSaveButton } from "@/components/spell-save-dialog";
-import { SORT_OPTIONS } from "@/components/spell-sort";
+import { SortSelect } from "@/components/spell-sort";
 import { StatePanel } from "@/components/state-panel";
 import { Button } from "@/components/ui/button";
-import {
-  atualizarSnapshotsDeIds,
-  obterSnapshots,
-  SNAPSHOT_TTL_MS,
-  type CachedSpellState,
-} from "@/lib/local/spell-cache";
 import { matchesSearch } from "@/lib/search";
 import { SAVED_PAGE_SIZE, type CatalogSort } from "@/lib/validation/catalog";
 import {
   RESERVED_GRIMOIRE_ID,
   type Grimoire,
 } from "@/lib/validation/grimoire";
-import type { Magia } from "@/lib/validation/magia";
+import type { Spell } from "@/lib/validation/spell";
 import { cn } from "@/lib/utils";
+import { useSavedSpellSnapshots } from "./use-saved-spell-snapshots";
 
 type SavedViewState = {
   collection: string;
@@ -60,8 +55,7 @@ type SavedViewState = {
 
 type ReadyEntry = {
   id: string;
-  state: CachedSpellState | null;
-  spell: Magia | null;
+  spell: Spell | null;
 };
 
 function buildSavedHref({ collection, query, sort, page }: SavedViewState): string {
@@ -73,30 +67,6 @@ function buildSavedHref({ collection, query, sort, page }: SavedViewState): stri
   if (page > 1) params.set("page", String(page));
   const queryString = params.toString();
   return queryString ? `/magias-salvas?${queryString}` : "/magias-salvas";
-}
-
-function errorMessage(cause: unknown, fallback: string): string {
-  return cause instanceof Error && cause.message ? cause.message : fallback;
-}
-
-function mergeSnapshotStates(
-  previous: Map<string, CachedSpellState>,
-  next: Map<string, CachedSpellState>,
-): Map<string, CachedSpellState> {
-  const merged = new Map(previous);
-  for (const [id, state] of next) merged.set(id, state);
-  return merged;
-}
-
-function remoteSnapshotState(spell: Magia): CachedSpellState {
-  const now = Date.now();
-  return {
-    spell,
-    cachedAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + SNAPSHOT_TTL_MS).toISOString(),
-    stale: false,
-    missing: false,
-  };
 }
 
 function sortEntries(entries: ReadyEntry[], sort: CatalogSort): ReadyEntry[] {
@@ -205,43 +175,6 @@ function SnapshotSkeletonGrid() {
   );
 }
 
-function SortControl({
-  value,
-  onChange,
-}: {
-  value: CatalogSort;
-  onChange: (value: CatalogSort) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <label
-        htmlFor="ordenar-magias-salvas"
-        className="whitespace-nowrap text-sm text-muted-foreground"
-      >
-        Ordenar por:
-      </label>
-      <div className="relative">
-        <select
-          id="ordenar-magias-salvas"
-          value={value}
-          onChange={(event) => onChange(event.target.value as CatalogSort)}
-          className="h-9 appearance-none rounded-sm border border-transparent bg-transparent py-1 pr-7 pl-1 text-sm font-medium text-foreground transition-colors hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-        >
-          {SORT_OPTIONS.map(([optionValue, label]) => (
-            <option key={optionValue} value={optionValue}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          className="pointer-events-none absolute top-1/2 right-1 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
-      </div>
-    </div>
-  );
-}
-
 export function SavedSpellsPage({
   initialCollection,
   initialQuery,
@@ -270,17 +203,6 @@ export function SavedSpellsPage({
   const [dialog, setDialog] = useState<GrimoireDialogState>(null);
   const [mobileCollectionOpen, setMobileCollectionOpen] = useState(false);
 
-  const [snapshots, setSnapshots] = useState<Map<string, CachedSpellState>>(new Map());
-  const [cachePhase, setCachePhase] = useState<"idle" | "loading" | "ready" | "error">(
-    "idle",
-  );
-  const [cacheError, setCacheError] = useState<string | null>(null);
-  const [syncState, setSyncState] = useState<"idle" | "loading" | "ready" | "error">(
-    "idle",
-  );
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState(0);
-
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const collectionExists =
@@ -306,85 +228,20 @@ export function SavedSpellsPage({
     );
   }, [snapshot, activeCollection]);
 
-  const idsKey = collectionIds.join(",");
-
-  useEffect(() => {
-    if (status !== "ready") return;
-
-    const ids = idsKey ? idsKey.split(",") : [];
-    if (ids.length === 0) {
-      setSnapshots(new Map());
-      setCacheError(null);
-      setCachePhase("ready");
-      setSyncError(null);
-      setSyncState("idle");
-      return;
-    }
-
-    let cancelled = false;
-    setCacheError(null);
-    setCachePhase("loading");
-    setSyncError(null);
-    setSyncState("loading");
-
-    async function loadSnapshots() {
-      try {
-        const cached = await obterSnapshots(ids);
-        if (cancelled) return;
-        setSnapshots((previous) => mergeSnapshotStates(previous, cached));
-        setCachePhase("ready");
-      } catch (cause) {
-        if (cancelled) return;
-        setCacheError(
-          errorMessage(cause, "Não foi possível ler as cópias locais das magias."),
-        );
-        setCachePhase("error");
-      }
-
-      try {
-        const remote = await atualizarSnapshotsDeIds(ids);
-        if (cancelled) return;
-        setSnapshots((previous) => {
-          const next = new Map(previous);
-          for (const spell of remote.values()) next.set(spell.id, remoteSnapshotState(spell));
-          return next;
-        });
-        setSyncState("ready");
-      } catch (cause) {
-        if (cancelled) return;
-        setSyncError(
-          errorMessage(
-            cause,
-            "Não foi possível sincronizar os detalhes das magias salvas.",
-          ),
-        );
-        setSyncState("error");
-      }
-    }
-
-    void loadSnapshots();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [idsKey, status, refreshToken]);
-
-  useEffect(() => {
-    function handleOnline() {
-      setRefreshToken((current) => current + 1);
-    }
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
-  }, []);
-
-  const readyForData =
-    status === "ready" && (cachePhase === "ready" || cachePhase === "error");
+  const {
+    snapshots,
+    cacheError,
+    syncState,
+    syncError,
+    syncing,
+    readyForData,
+    retrySync,
+  } = useSavedSpellSnapshots(collectionIds, status === "ready");
 
   const collectionEntries = useMemo<ReadyEntry[]>(
     () =>
       collectionIds.map((id) => {
-        const state = snapshots.get(id) ?? null;
-        return { id, state, spell: state?.spell ?? null };
+        return { id, spell: snapshots.get(id)?.spell ?? null };
       }),
     [collectionIds, snapshots],
   );
@@ -425,8 +282,6 @@ export function SavedSpellsPage({
   const missingCount = readyForData
     ? collectionEntries.filter((entry) => !entry.spell).length
     : 0;
-  const syncing = syncState === "loading";
-
   const canonicalHref = useMemo(
     () =>
       buildSavedHref({
@@ -450,10 +305,6 @@ export function SavedSpellsPage({
     if (!readyForData) return;
     if (page > pageCount) setPage(pageCount);
   }, [readyForData, page, pageCount]);
-
-  function retrySync() {
-    setRefreshToken((current) => current + 1);
-  }
 
   function selectCollection(id: string) {
     setCollection(id);
@@ -613,7 +464,11 @@ export function SavedSpellsPage({
                 <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
               </div>
               {readyForData && totalUnique > 0 ? (
-                <SortControl value={sort} onChange={changeSort} />
+                <SortSelect
+                  id="ordenar-magias-salvas"
+                  value={sort}
+                  onChange={changeSort}
+                />
               ) : null}
             </div>
 
@@ -761,21 +616,21 @@ export function SavedSpellsPage({
                     entry.spell ? (
                       <SpellCard
                         key={entry.id}
-                        magia={entry.spell}
+                        spell={entry.spell}
                         from={canonicalHref}
                       />
                     ) : (
                       <UnavailableSpellCard
                         key={entry.id}
-                        magiaId={entry.id}
+                        spellId={entry.id}
                         onRetry={retrySync}
                         retrying={syncing}
                         action={
                           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                             Organizar
                             <SpellSaveButton
-                              magiaId={entry.id}
-                              magiaNome="esta magia"
+                              spellId={entry.id}
+                              spellName="esta magia"
                               ariaLabel="Gerenciar os grimórios desta magia não sincronizada"
                             />
                           </span>

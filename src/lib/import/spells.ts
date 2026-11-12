@@ -3,9 +3,9 @@ import path from "node:path";
 
 import type { DbClient } from "@/lib/db/types";
 import {
-  magiaImportSchema,
-  type MagiaImport,
-} from "@/lib/validation/magia";
+  spellImportSchema,
+  type SpellImport,
+} from "@/lib/validation/spell";
 
 export const DEFAULT_SOURCE_PATH = path.join(process.cwd(), "data", "magias.json");
 export const DEFAULT_REPORT_PATH = path.join(process.cwd(), "data", "import-report.json");
@@ -18,7 +18,7 @@ export type CatalogValidationIssue = {
 };
 
 export type ValidatedCatalog = {
-  spells: MagiaImport[];
+  spells: SpellImport[];
   issues: CatalogValidationIssue[];
 };
 
@@ -66,7 +66,7 @@ export async function readSourceCatalog(
 }
 
 export function validateCatalogEntries(entries: unknown[]): ValidatedCatalog {
-  const spells: MagiaImport[] = [];
+  const spells: SpellImport[] = [];
   const issues: CatalogValidationIssue[] = [];
   const seenSlugs = new Map<string, number>();
 
@@ -89,7 +89,7 @@ export function validateCatalogEntries(entries: unknown[]): ValidatedCatalog {
       seenSlugs.set(slug, index);
     }
 
-    const parsed = magiaImportSchema.safeParse(entry);
+    const parsed = spellImportSchema.safeParse(entry);
     if (!parsed.success) {
       issues.push({
         index,
@@ -148,7 +148,7 @@ type UpsertRow = { id: string; inserted: boolean };
 
 export async function upsertCatalog(
   db: DbClient,
-  spells: MagiaImport[],
+  spells: SpellImport[],
 ): Promise<UpsertResult[]> {
   const results: UpsertResult[] = [];
 

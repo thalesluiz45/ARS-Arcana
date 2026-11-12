@@ -11,13 +11,13 @@ import {
 } from "react";
 
 import {
-  atualizarSelecaoMagia,
-  carregarColecoesLocais,
-  criarGrimorio,
-  excluirGrimorio,
-  renomearGrimorio,
+  createGrimoire,
+  deleteGrimoire,
+  loadLocalCollections,
+  renameGrimoire,
   type LocalCollectionsSnapshot,
   type SpellSelection,
+  updateSpellSelection,
 } from "@/lib/local/grimoires";
 import { subscribeToLocalDataChanges } from "@/lib/local/events";
 import type { Grimoire, GrimoireWithCount } from "@/lib/validation/grimoire";
@@ -35,9 +35,9 @@ type LocalDataContextValue = {
   createGrimoire: (name: string) => Promise<Grimoire>;
   renameGrimoire: (id: string, name: string) => Promise<void>;
   deleteGrimoire: (id: string) => Promise<void>;
-  saveSpellSelection: (magiaId: string, selection: SpellSelection) => Promise<void>;
-  getGrimoireIdsForSpell: (magiaId: string) => string[];
-  isSpellSaved: (magiaId: string) => boolean;
+  saveSpellSelection: (spellId: string, selection: SpellSelection) => Promise<void>;
+  getGrimoireIdsForSpell: (spellId: string) => string[];
+  isSpellSaved: (spellId: string) => boolean;
 };
 
 const LocalDataContext = createContext<LocalDataContextValue | null>(null);
@@ -51,7 +51,7 @@ export function LocalDataProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await carregarColecoesLocais();
+      const next = await loadLocalCollections();
       setSnapshot(next);
       setStatus("ready");
       setError(null);
@@ -84,12 +84,12 @@ export function LocalDataProvider({ children }: { children: ReactNode }) {
   }, [snapshot]);
 
   const getGrimoireIdsForSpell = useCallback(
-    (magiaId: string) => associationsBySpell.get(magiaId) ?? [],
+    (spellId: string) => associationsBySpell.get(spellId) ?? [],
     [associationsBySpell],
   );
 
   const isSpellSaved = useCallback(
-    (magiaId: string) => (associationsBySpell.get(magiaId)?.length ?? 0) > 0,
+    (spellId: string) => (associationsBySpell.get(spellId)?.length ?? 0) > 0,
     [associationsBySpell],
   );
 
@@ -102,10 +102,10 @@ export function LocalDataProvider({ children }: { children: ReactNode }) {
       reserved: snapshot?.reserved ?? null,
       totalUnique: snapshot?.totalUnique ?? 0,
       refresh,
-      createGrimoire: criarGrimorio,
-      renameGrimoire: renomearGrimorio,
-      deleteGrimoire: excluirGrimorio,
-      saveSpellSelection: atualizarSelecaoMagia,
+      createGrimoire,
+      renameGrimoire,
+      deleteGrimoire,
+      saveSpellSelection: updateSpellSelection,
       getGrimoireIdsForSpell,
       isSpellSaved,
     }),

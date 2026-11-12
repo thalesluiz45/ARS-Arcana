@@ -53,7 +53,7 @@ export default async function LibraryPage({
   let failure: CatalogFailure | null = null;
 
   try {
-    page = await catalogRepository.buscarMagias(filters);
+    page = await catalogRepository.searchSpells(filters);
   } catch (error) {
     failure = describeCatalogFailure(error);
     console.error("[biblioteca] falha ao carregar o catálogo:", error);
@@ -135,10 +135,10 @@ export default async function LibraryPage({
               {page && page.items.length > 0 ? (
                 <>
                   <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                    {page.items.map((magia) => (
+                    {page.items.map((spell) => (
                       <SpellCard
-                        key={magia.id}
-                        magia={magia}
+                        key={spell.id}
+                        spell={spell}
                         from={currentSearch ? `/?${currentSearch}` : "/"}
                       />
                     ))}

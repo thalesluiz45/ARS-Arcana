@@ -6,14 +6,14 @@ import {
   type Grimoire,
   type SavedSpell,
 } from "@/lib/validation/grimoire";
-import type { Magia } from "@/lib/validation/magia";
+import type { Spell } from "@/lib/validation/spell";
 
 export const LOCAL_DB_NAME = "ars-arcana";
 export const LOCAL_DB_VERSION = 1;
 
-export type MagiaCacheRecord = {
+export type SpellCacheRecord = {
   magiaId: string;
-  snapshot: Magia;
+  snapshot: Spell;
   cachedAt: string;
   expiresAt: string;
 };
@@ -31,7 +31,7 @@ export interface ArsArcanaDB extends DBSchema {
   };
   cache_magias: {
     key: string;
-    value: MagiaCacheRecord;
+    value: SpellCacheRecord;
     indexes: { "by-expira": string };
   };
 }

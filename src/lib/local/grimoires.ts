@@ -8,11 +8,7 @@ import {
   type GrimoireWithCount,
   type SavedSpell,
 } from "@/lib/validation/grimoire";
-
-function isReservedName(value: string): boolean {
-  return normalizeName(value) === normalizeName(RESERVED_GRIMOIRE_NAME);
-}
-import { magiaIdSchema } from "@/lib/validation/magia";
+import { spellIdSchema } from "@/lib/validation/spell";
 
 export type LocalCollectionsSnapshot = {
   lists: Grimoire[];
@@ -23,17 +19,21 @@ export type LocalCollectionsSnapshot = {
 };
 
 export type SpellSelection = {
-  grimorioIds: string[];
-  semGrimorio: boolean;
+  grimoireIds: string[];
+  withoutGrimoire: boolean;
 };
 
-const nowIso = () => new Date().toISOString();
+const currentIsoDate = () => new Date().toISOString();
 
 function normalizeName(value: string): string {
   return value.trim().toLocaleLowerCase("pt-BR");
 }
 
-function newGrimoireId(): string {
+function isReservedGrimoireName(value: string): boolean {
+  return normalizeName(value) === normalizeName(RESERVED_GRIMOIRE_NAME);
+}
+
+function createGrimoireId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
@@ -48,8 +48,8 @@ function validateGrimoireName(name: string): string {
   return parsed.data;
 }
 
-function validateMagiaId(magiaId: string): string {
-  const parsed = magiaIdSchema.safeParse(magiaId);
+function validateSpellId(spellId: string): string {
+  const parsed = spellIdSchema.safeParse(spellId);
   if (!parsed.success) {
     throw new LocalStorageError("Identificador de magia inválido.");
   }
@@ -74,7 +74,7 @@ function abortTransaction(
   throw new LocalStorageError(message);
 }
 
-function sortLists(lists: Grimoire[]): Grimoire[] {
+function sortGrimoires(lists: Grimoire[]): Grimoire[] {
   return [...lists].sort((left, right) => {
     if (left.reservada) return 1;
     if (right.reservada) return -1;
@@ -82,7 +82,7 @@ function sortLists(lists: Grimoire[]): Grimoire[] {
   });
 }
 
-function countByList(associations: SavedSpell[]): Map<string, Set<string>> {
+function countSpellsByGrimoire(associations: SavedSpell[]): Map<string, Set<string>> {
   const counts = new Map<string, Set<string>>();
   for (const association of associations) {
     const set = counts.get(association.listaId) ?? new Set<string>();
@@ -92,11 +92,11 @@ function countByList(associations: SavedSpell[]): Map<string, Set<string>> {
   return counts;
 }
 
-function withCount(list: Grimoire, counts: Map<string, Set<string>>): GrimoireWithCount {
+function addSpellCount(list: Grimoire, counts: Map<string, Set<string>>): GrimoireWithCount {
   return { ...list, total: counts.get(list.id)?.size ?? 0 };
 }
 
-export async function carregarColecoesLocais(): Promise<LocalCollectionsSnapshot> {
+export async function loadLocalCollections(): Promise<LocalCollectionsSnapshot> {
   return guard("Não foi possível carregar seus grimórios locais.", async () => {
     const db = await getDatabase();
     const transaction = db.transaction(["listas_salvas", "magias_salvas"], "readonly");
@@ -106,42 +106,42 @@ export async function carregarColecoesLocais(): Promise<LocalCollectionsSnapshot
     ]);
     await transaction.done;
 
-    const counts = countByList(associations);
-    const sorted = sortLists(lists);
+    const counts = countSpellsByGrimoire(associations);
+    const sorted = sortGrimoires(lists);
     const reservedList =
       sorted.find((list) => list.reservada) ??
       ({
         id: RESERVED_GRIMOIRE_ID,
         nome: RESERVED_GRIMOIRE_NAME,
-        criadaEm: nowIso(),
-        atualizadaEm: nowIso(),
+        criadaEm: currentIsoDate(),
+        atualizadaEm: currentIsoDate(),
         reservada: true,
       } satisfies Grimoire);
     const namedGrimoires = sorted
       .filter((list) => !list.reservada)
-      .map((list) => withCount(list, counts));
+      .map((list) => addSpellCount(list, counts));
     const unique = new Set(associations.map((association) => association.magiaId));
 
     return {
       lists: sorted,
       namedGrimoires,
-      reserved: withCount(reservedList, counts),
+      reserved: addSpellCount(reservedList, counts),
       totalUnique: unique.size,
       associations,
     };
   });
 }
 
-export async function listarGrimorios(): Promise<Grimoire[]> {
+export async function listGrimoires(): Promise<Grimoire[]> {
   return guard("Não foi possível carregar seus grimórios.", async () => {
     const db = await getDatabase();
-    return sortLists(await db.getAll("listas_salvas"));
+    return sortGrimoires(await db.getAll("listas_salvas"));
   });
 }
 
-export async function criarGrimorio(nome: string): Promise<Grimoire> {
-  const validName = validateGrimoireName(nome);
-  if (isReservedName(validName)) {
+export async function createGrimoire(name: string): Promise<Grimoire> {
+  const validName = validateGrimoireName(name);
+  if (isReservedGrimoireName(validName)) {
     throw new LocalStorageError("O nome “Sem grimório” é reservado.");
   }
   return guard("Não foi possível criar o grimório.", async () => {
@@ -158,9 +158,9 @@ export async function criarGrimorio(nome: string): Promise<Grimoire> {
       abortTransaction(transaction, "Já existe um grimório com esse nome.");
     }
 
-    const now = nowIso();
+    const now = currentIsoDate();
     const grimoire: Grimoire = {
-      id: newGrimoireId(),
+      id: createGrimoireId(),
       nome: validName,
       criadaEm: now,
       atualizadaEm: now,
@@ -173,16 +173,16 @@ export async function criarGrimorio(nome: string): Promise<Grimoire> {
   });
 }
 
-export async function renomearGrimorio(listaId: string, nome: string): Promise<void> {
-  const validName = validateGrimoireName(nome);
-  if (isReservedName(validName)) {
+export async function renameGrimoire(grimoireId: string, name: string): Promise<void> {
+  const validName = validateGrimoireName(name);
+  if (isReservedGrimoireName(validName)) {
     throw new LocalStorageError("O nome “Sem grimório” é reservado.");
   }
   return guard("Não foi possível renomear o grimório.", async () => {
     const db = await getDatabase();
     const transaction = db.transaction("listas_salvas", "readwrite");
     const store = transaction.objectStore("listas_salvas");
-    const list = await store.get(listaId);
+    const list = await store.get(grimoireId);
 
     if (!list) {
       abortTransaction(transaction, "Grimório não encontrado.");
@@ -195,7 +195,7 @@ export async function renomearGrimorio(listaId: string, nome: string): Promise<v
     if (
       lists.some(
         (candidate) =>
-          candidate.id !== listaId &&
+          candidate.id !== grimoireId &&
           !candidate.reservada &&
           normalizeName(candidate.nome) === normalizeName(validName),
       )
@@ -203,19 +203,19 @@ export async function renomearGrimorio(listaId: string, nome: string): Promise<v
       abortTransaction(transaction, "Já existe um grimório com esse nome.");
     }
 
-    await store.put({ ...list, nome: validName, atualizadaEm: nowIso() });
+    await store.put({ ...list, nome: validName, atualizadaEm: currentIsoDate() });
     await transaction.done;
-    notifyLocalDataChanged({ reason: "grimoire-renamed", listaId });
+    notifyLocalDataChanged({ reason: "grimoire-renamed", listaId: grimoireId });
   });
 }
 
-export async function excluirGrimorio(listaId: string): Promise<void> {
+export async function deleteGrimoire(grimoireId: string): Promise<void> {
   return guard("Não foi possível excluir o grimório.", async () => {
     const db = await getDatabase();
     const transaction = db.transaction(["listas_salvas", "magias_salvas"], "readwrite");
     const listsStore = transaction.objectStore("listas_salvas");
     const spellsStore = transaction.objectStore("magias_salvas");
-    const list = await listsStore.get(listaId);
+    const list = await listsStore.get(grimoireId);
 
     if (!list) {
       abortTransaction(transaction, "Grimório não encontrado.");
@@ -228,12 +228,12 @@ export async function excluirGrimorio(listaId: string): Promise<void> {
     const namedIds = new Set(
       allLists.filter((candidate) => !candidate.reservada).map((candidate) => candidate.id),
     );
-    const associations = await spellsStore.index("by-lista").getAll(listaId);
+    const associations = await spellsStore.index("by-lista").getAll(grimoireId);
 
     for (const association of associations) {
       const spellAssociations = await spellsStore.index("by-magia").getAll(association.magiaId);
       const hasOtherNamedGrimoire = spellAssociations.some(
-        (candidate) => candidate.listaId !== listaId && namedIds.has(candidate.listaId),
+        (candidate) => candidate.listaId !== grimoireId && namedIds.has(candidate.listaId),
       );
       const alreadyReserved = spellAssociations.some(
         (candidate) => candidate.listaId === RESERVED_GRIMOIRE_ID,
@@ -246,27 +246,27 @@ export async function excluirGrimorio(listaId: string): Promise<void> {
           salvaEm: association.salvaEm,
         });
       }
-      await spellsStore.delete([listaId, association.magiaId]);
+      await spellsStore.delete([grimoireId, association.magiaId]);
     }
 
-    await listsStore.delete(listaId);
+    await listsStore.delete(grimoireId);
     await transaction.done;
-    notifyLocalDataChanged({ reason: "grimoire-deleted", listaId });
+    notifyLocalDataChanged({ reason: "grimoire-deleted", listaId: grimoireId });
   });
 }
 
-export async function listarAssociacoes(listaId?: string): Promise<SavedSpell[]> {
+export async function listSavedSpells(grimoireId?: string): Promise<SavedSpell[]> {
   return guard("Não foi possível carregar as magias salvas.", async () => {
     const db = await getDatabase();
-    if (listaId) {
-      return db.getAllFromIndex("magias_salvas", "by-lista", listaId);
+    if (grimoireId) {
+      return db.getAllFromIndex("magias_salvas", "by-lista", grimoireId);
     }
     return db.getAll("magias_salvas");
   });
 }
 
-export async function obterGrimoriosDaMagia(magiaId: string): Promise<string[]> {
-  const validId = validateMagiaId(magiaId);
+export async function getGrimoireIdsForSpell(spellId: string): Promise<string[]> {
+  const validId = validateSpellId(spellId);
   return guard("Não foi possível verificar os grimórios desta magia.", async () => {
     const db = await getDatabase();
     const associations = await db.getAllFromIndex("magias_salvas", "by-magia", validId);
@@ -274,13 +274,14 @@ export async function obterGrimoriosDaMagia(magiaId: string): Promise<string[]> 
   });
 }
 
-export async function atualizarSelecaoMagia(
-  magiaId: string,
+export async function updateSpellSelection(
+  spellId: string,
   selection: SpellSelection,
 ): Promise<void> {
-  const validId = validateMagiaId(magiaId);
-  const namedIds = [...new Set(selection.grimorioIds.filter((id) => id !== RESERVED_GRIMOIRE_ID))];
-  const includeReserved = selection.semGrimorio || selection.grimorioIds.includes(RESERVED_GRIMOIRE_ID);
+  const validId = validateSpellId(spellId);
+  const namedIds = [...new Set(selection.grimoireIds.filter((id) => id !== RESERVED_GRIMOIRE_ID))];
+  const includeReserved =
+    selection.withoutGrimoire || selection.grimoireIds.includes(RESERVED_GRIMOIRE_ID);
 
   if (includeReserved && namedIds.length > 0) {
     throw new LocalStorageError(
@@ -307,7 +308,7 @@ export async function atualizarSelecaoMagia(
       await spellsStore.delete([association.listaId, association.magiaId]);
     }
 
-    const salvaEm = nowIso();
+    const salvaEm = currentIsoDate();
     if (includeReserved) {
       await spellsStore.put({ listaId: RESERVED_GRIMOIRE_ID, magiaId: validId, salvaEm });
     } else {
@@ -321,20 +322,20 @@ export async function atualizarSelecaoMagia(
   });
 }
 
-export async function salvarMagia(listaId: string, magiaId: string): Promise<void> {
-  const validId = validateMagiaId(magiaId);
+export async function saveSpell(grimoireId: string, spellId: string): Promise<void> {
+  const validId = validateSpellId(spellId);
   return guard("Não foi possível salvar a magia.", async () => {
     const db = await getDatabase();
     const transaction = db.transaction(["listas_salvas", "magias_salvas"], "readwrite");
     const listsStore = transaction.objectStore("listas_salvas");
     const spellsStore = transaction.objectStore("magias_salvas");
-    const list = await listsStore.get(listaId);
+    const list = await listsStore.get(grimoireId);
 
     if (!list) {
       abortTransaction(transaction, "Grimório não encontrado.");
     }
 
-    const salvaEm = nowIso();
+    const salvaEm = currentIsoDate();
     if (list.reservada) {
       const namedLists = new Set(
         (await listsStore.getAll())
@@ -349,25 +350,25 @@ export async function salvarMagia(listaId: string, magiaId: string): Promise<voi
       }
       await spellsStore.put({ listaId: RESERVED_GRIMOIRE_ID, magiaId: validId, salvaEm });
     } else {
-      await spellsStore.put({ listaId, magiaId: validId, salvaEm });
+      await spellsStore.put({ listaId: grimoireId, magiaId: validId, salvaEm });
       await spellsStore.delete([RESERVED_GRIMOIRE_ID, validId]);
     }
 
     await transaction.done;
-    notifyLocalDataChanged({ reason: "spell-saved", magiaId: validId, listaId });
+    notifyLocalDataChanged({ reason: "spell-saved", magiaId: validId, listaId: grimoireId });
   });
 }
 
-export async function removerMagiaSalva(listaId: string, magiaId: string): Promise<void> {
-  const validId = validateMagiaId(magiaId);
+export async function removeSavedSpell(grimoireId: string, spellId: string): Promise<void> {
+  const validId = validateSpellId(spellId);
   return guard("Não foi possível remover a magia.", async () => {
     const db = await getDatabase();
-    await db.delete("magias_salvas", [listaId, validId]);
-    notifyLocalDataChanged({ reason: "spell-removed", magiaId: validId, listaId });
+    await db.delete("magias_salvas", [grimoireId, validId]);
+    notifyLocalDataChanged({ reason: "spell-removed", magiaId: validId, listaId: grimoireId });
   });
 }
 
-export async function contarMagiasUnicas(): Promise<number> {
+export async function countUniqueSpells(): Promise<number> {
   return guard("Não foi possível contar suas magias salvas.", async () => {
     const db = await getDatabase();
     const associations = await db.getAll("magias_salvas");
@@ -375,8 +376,8 @@ export async function contarMagiasUnicas(): Promise<number> {
   });
 }
 
-export async function obterAssociacoesDaMagia(magiaId: string): Promise<SavedSpell[]> {
-  const validId = validateMagiaId(magiaId);
+export async function getSavedSpellAssociations(spellId: string): Promise<SavedSpell[]> {
+  const validId = validateSpellId(spellId);
   return guard("Não foi possível verificar as listas desta magia.", async () => {
     const db = await getDatabase();
     return db.getAllFromIndex("magias_salvas", "by-magia", validId);

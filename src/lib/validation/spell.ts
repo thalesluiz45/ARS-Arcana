@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const magiaIdSchema = z.uuid();
+export const spellIdSchema = z.uuid();
 
 const isoDateSchema = z
   .union([z.string().min(1), z.date()])
@@ -23,7 +23,7 @@ export const spellComponentsSchema = z
     }
   });
 
-export const magiaSchema = z.object({
+export const spellSchema = z.object({
   id: z.uuid(),
   slug: z
     .string()
@@ -42,28 +42,28 @@ export const magiaSchema = z.object({
   atualizadoEm: isoDateSchema,
 });
 
-export const magiaImportSchema = magiaSchema.omit({
+export const spellImportSchema = spellSchema.omit({
   id: true,
   criadoEm: true,
   atualizadoEm: true,
 });
 
-export type Magia = z.infer<typeof magiaSchema>;
-export type MagiaImport = z.infer<typeof magiaImportSchema>;
+export type Spell = z.infer<typeof spellSchema>;
+export type SpellImport = z.infer<typeof spellImportSchema>;
 export type SpellComponents = z.infer<typeof spellComponentsSchema>;
 
-export function spellCircleLabel(circulo: number): string {
-  return circulo === 0 ? "Truque" : `${circulo}º Círculo`;
+export function spellCircleLabel(circle: number): string {
+  return circle === 0 ? "Truque" : `${circle}º Círculo`;
 }
 
-export function spellComponentsLabel(componentes: SpellComponents): string {
+export function spellComponentsLabel(components: SpellComponents): string {
   const values: string[] = [];
-  if (componentes.verbal) values.push("V");
-  if (componentes.somatico) values.push("S");
-  if (componentes.material) values.push("M");
+  if (components.verbal) values.push("V");
+  if (components.somatico) values.push("S");
+  if (components.material) values.push("M");
   return values.join(" · ");
 }
 
-export function isConcentrationSpell(duracao: string): boolean {
-  return /^concentra[çc][aã]o/i.test(duracao.trim());
+export function isConcentrationSpell(duration: string): boolean {
+  return /^concentra[çc][aã]o/i.test(duration.trim());
 }

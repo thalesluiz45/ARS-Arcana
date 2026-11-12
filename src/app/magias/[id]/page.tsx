@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { catalogRepository } from "@/lib/catalog/repository";
 import { safeInternalPath } from "@/lib/navigation";
-import { magiaIdSchema } from "@/lib/validation/magia";
+import { spellIdSchema } from "@/lib/validation/spell";
 
 import { SpellDetail } from "./spell-detail";
 import { SpellNotFound } from "./spell-not-found";
@@ -19,12 +19,12 @@ async function resolveFrom(searchParams: SearchParams): Promise<string> {
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id } = await params;
-  if (!magiaIdSchema.safeParse(id).success) {
+  if (!spellIdSchema.safeParse(id).success) {
     return { title: "Magia não encontrada" };
   }
 
   try {
-    const spell = await catalogRepository.getMagiaById(id);
+    const spell = await catalogRepository.getSpellById(id);
     if (!spell) return { title: "Magia não encontrada" };
     return {
       title: spell.nome,
@@ -45,9 +45,9 @@ export default async function SpellPage({
   const { id } = await params;
   const from = await resolveFrom(searchParams);
 
-  if (!magiaIdSchema.safeParse(id).success) {
+  if (!spellIdSchema.safeParse(id).success) {
     return <SpellNotFound from={from} />;
   }
 
-  return <SpellDetail magiaId={id} from={from} />;
+  return <SpellDetail spellId={id} from={from} />;
 }

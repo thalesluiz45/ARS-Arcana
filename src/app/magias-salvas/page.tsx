@@ -20,7 +20,11 @@ function readParam(
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function MagiasSalvasPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function SavedSpellsRoute({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const resolved = await searchParams;
 
   const rawCollection = readParam(resolved, "grimorio")?.trim();

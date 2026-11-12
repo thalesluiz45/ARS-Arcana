@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { readSourceCatalog, validateCatalogEntries, buildImportReport } from "@/lib/import/magias";
+import { readSourceCatalog, validateCatalogEntries, buildImportReport } from "@/lib/import/spells";
 
 import { makeSpell } from "./fixtures";
 
-describe("validação da importação", () => {
-  it("aceita magias válidas e reporta o índice dos registros inválidos", () => {
+describe("catalog import validation", () => {
+  it("accepts valid spells and reports the indices of invalid entries", () => {
     const valid = makeSpell();
     const result = validateCatalogEntries([
       valid,
@@ -27,7 +27,7 @@ describe("validação da importação", () => {
     expect(result.issues).toHaveLength(3);
   });
 
-  it("reconcilia slugs ausentes e extras no banco", () => {
+  it("reconciles missing and extra database slugs", () => {
     const validated = {
       spells: [makeSpell({ slug: "bola-de-fogo" }), makeSpell({ slug: "curar-ferimentos" })],
       issues: [],
@@ -60,7 +60,7 @@ describe("validação da importação", () => {
     });
   });
 
-  it("não inventa reconciliação quando o banco não foi consultado", () => {
+  it("does not report reconciliation when the database was not queried", () => {
     const report = buildImportReport({
       entries: [],
       validated: { spells: [], issues: [] },
@@ -75,8 +75,8 @@ describe("validação da importação", () => {
   });
 });
 
-describe("catálogo de referência", () => {
-  it("contém as 391 magias extraídas sem erros de validação", async () => {
+describe("reference catalog", () => {
+  it("contains all 391 extracted spells without validation errors", async () => {
     const { entries } = await readSourceCatalog();
     const result = validateCatalogEntries(entries);
 

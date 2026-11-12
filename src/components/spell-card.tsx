@@ -9,8 +9,8 @@ import {
   isConcentrationSpell,
   spellCircleLabel,
   spellComponentsLabel,
-  type Magia,
-} from "@/lib/validation/magia";
+  type Spell,
+} from "@/lib/validation/spell";
 import { cn } from "@/lib/utils";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -23,16 +23,16 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export function SpellCard({
-  magia,
+  spell,
   from,
   className,
 }: {
-  magia: Magia;
+  spell: Spell;
   from: string;
   className?: string;
 }) {
-  const href = spellHref(magia.id, from);
-  const concentration = isConcentrationSpell(magia.duracao);
+  const href = spellHref(spell.id, from);
+  const concentration = isConcentrationSpell(spell.duracao);
 
   return (
     <article
@@ -42,31 +42,31 @@ export function SpellCard({
       )}
     >
       <div className="flex items-start gap-3 p-5 pb-4">
-        <SpellSchoolIcon school={magia.tipo} />
+        <SpellSchoolIcon school={spell.tipo} />
         <div className="min-w-0 flex-1">
           <h3 className="font-heading text-[1.5rem] leading-[1.08] tracking-[-0.01em] text-forest">
             <Link href={href} className="transition-colors hover:text-[#7d5e2a]">
-              {magia.nome}
+              {spell.nome}
             </Link>
           </h3>
           <p className="mt-1.5 text-[0.63rem] font-semibold uppercase tracking-[0.13em] text-muted-foreground">
-            {magia.tipo} <span aria-hidden="true">·</span> {spellCircleLabel(magia.circulo)}
+            {spell.tipo} <span aria-hidden="true">·</span> {spellCircleLabel(spell.circulo)}
           </p>
         </div>
-        <SpellSaveButton magiaId={magia.id} magiaNome={magia.nome} />
+        <SpellSaveButton spellId={spell.id} spellName={spell.nome} />
       </div>
 
       <div className="mx-5 border-t border-border" />
 
       <div className="flex flex-1 flex-col p-5 pt-4">
         <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-          {magia.descricao}
+          {spell.descricao}
         </p>
 
         <dl className="mt-5 grid grid-cols-3 gap-x-3 border-t border-border pt-4">
-          <Stat label="Conjuração" value={magia.tempoConjuracao} />
-          <Stat label="Alcance" value={magia.alcance} />
-          <Stat label="Duração" value={magia.duracao} />
+          <Stat label="Conjuração" value={spell.tempoConjuracao} />
+          <Stat label="Alcance" value={spell.alcance} />
+          <Stat label="Duração" value={spell.duracao} />
         </dl>
 
         <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
@@ -89,7 +89,7 @@ export function SpellCard({
               className="text-[0.64rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
               title="Componentes"
             >
-              {spellComponentsLabel(magia.componentes)}
+              {spellComponentsLabel(spell.componentes)}
             </span>
           )}
         </div>
@@ -99,12 +99,12 @@ export function SpellCard({
 }
 
 export function UnavailableSpellCard({
-  magiaId,
+  spellId,
   onRetry,
   retrying,
   action,
 }: {
-  magiaId: string;
+  spellId: string;
   onRetry?: () => void;
   retrying?: boolean;
   action?: ReactNode;
@@ -131,7 +131,7 @@ export function UnavailableSpellCard({
         será sincronizada quando a conexão voltar.
       </p>
       <code className="mt-3 max-w-full truncate rounded-sm bg-parchment px-2 py-1 text-[0.68rem] text-muted-foreground">
-        {magiaId}
+        {spellId}
       </code>
       {onRetry || action ? (
         <div className="mt-5 flex w-full flex-wrap items-center justify-between gap-3">

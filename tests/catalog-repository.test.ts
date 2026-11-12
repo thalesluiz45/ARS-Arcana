@@ -11,7 +11,7 @@ import { createPgliteHandle, type PgliteHandle } from "@/lib/db/pglite";
 import {
   listCatalogSlugs,
   upsertCatalog,
-} from "@/lib/import/magias";
+} from "@/lib/import/spells";
 import { parseCatalogFilters } from "@/lib/validation/catalog";
 
 import { makeSpell } from "./fixtures";
@@ -64,9 +64,9 @@ afterAll(async () => {
   await handle.close();
 });
 
-describe("schema e repositório do catálogo", () => {
-  it("aceita círculo 0 e 9 e devolve facetas coerentes", async () => {
-    const page = await repository.buscarMagias(parseCatalogFilters(new URLSearchParams()));
+describe("catalog schema and repository", () => {
+  it("accepts circles 0 and 9 and returns consistent facets", async () => {
+    const page = await repository.searchSpells(parseCatalogFilters(new URLSearchParams()));
 
     expect(page.total).toBe(3);
     expect(page.items).toHaveLength(3);
@@ -86,33 +86,33 @@ describe("schema e repositório do catálogo", () => {
     );
   });
 
-  it("filtra por círculo 0, escola e classes", async () => {
-    const cantrips = await repository.buscarMagias(
+  it("filters by circle 0, school, and classes", async () => {
+    const cantrips = await repository.searchSpells(
       parseCatalogFilters(new URLSearchParams("circulo=0")),
     );
     expect(cantrips.items.map((spell) => spell.nome)).toEqual(["Ilusão Menor"]);
 
-    const illusion = await repository.buscarMagias(
+    const illusion = await repository.searchSpells(
       parseCatalogFilters(new URLSearchParams("tipo=Ilus%C3%A3o")),
     );
     expect(illusion.items.map((spell) => spell.slug)).toEqual(["ilusao-menor"]);
 
-    const bardo = await repository.buscarMagias(
+    const bardo = await repository.searchSpells(
       parseCatalogFilters(new URLSearchParams("classe=Bardo")),
     );
     expect(bardo.items.map((spell) => spell.slug)).toEqual(["ilusao-menor"]);
 
-    const search = await repository.buscarMagias(
+    const search = await repository.searchSpells(
       parseCatalogFilters(new URLSearchParams("q=ilusa")),
     );
     expect(search.items.map((spell) => spell.slug)).toEqual(["ilusao-menor"]);
   });
 
-  it("pagina resultados e ordena de forma estável", async () => {
-    const first = await repository.buscarMagias(
+  it("paginates results and sorts them stably", async () => {
+    const first = await repository.searchSpells(
       parseCatalogFilters(new URLSearchParams("limit=2&sort=nome-asc")),
     );
-    const second = await repository.buscarMagias(
+    const second = await repository.searchSpells(
       parseCatalogFilters(new URLSearchParams("limit=2&page=2&sort=nome-asc")),
     );
 
@@ -123,8 +123,8 @@ describe("schema e repositório do catálogo", () => {
     expect(second.items.map((spell) => spell.nome)).toEqual(["Ilusão Menor"]);
   });
 
-  it("busca por ID, slug e lista de IDs na ordem solicitada", async () => {
-    const all = await repository.buscarMagias(parseCatalogFilters(new URLSearchParams()));
+  it("looks up spells by ID and slug and preserves requested ID order", async () => {
+    const all = await repository.searchSpells(parseCatalogFilters(new URLSearchParams()));
     const byName = new Map(all.items.map((spell) => [spell.nome, spell]));
     const fireball = byName.get("Bola de Fogo");
     const wish = byName.get("Desejo");
@@ -132,17 +132,17 @@ describe("schema e repositório do catálogo", () => {
     expect(fireball).toBeDefined();
     expect(wish).toBeDefined();
 
-    const byId = await repository.getMagiaById(fireball!.id);
+    const byId = await repository.getSpellById(fireball!.id);
     expect(byId?.slug).toBe("bola-de-fogo");
 
-    const bySlug = await repository.getMagiaBySlug("desejo");
+    const bySlug = await repository.getSpellBySlug("desejo");
     expect(bySlug?.nome).toBe("Desejo");
 
-    const ordered = await repository.listarMagiasPorIds([wish!.id, fireball!.id]);
+    const ordered = await repository.listSpellsByIds([wish!.id, fireball!.id]);
     expect(ordered.map((spell) => spell.slug)).toEqual(["desejo", "bola-de-fogo"]);
   });
 
-  it("preserva o ID ao atualizar uma magia pelo slug", async () => {
+  it("preserves the ID when updating a spell by slug", async () => {
     const [before] = await upsertCatalog(handle.client, [
       makeSpell({ slug: "alarme", nome: "Alarme" }),
     ]);
@@ -152,13 +152,13 @@ describe("schema e repositório do catálogo", () => {
 
     expect(after.id).toBe(before!.id);
     expect(after.inserted).toBe(false);
-    expect((await repository.getMagiaBySlug("alarme"))?.nome).toBe("Alarme Revisado");
+    expect((await repository.getSpellBySlug("alarme"))?.nome).toBe("Alarme Revisado");
     expect((await listCatalogSlugs(handle.client)).filter((slug) => slug === "alarme")).toHaveLength(
       1,
     );
   });
 
-  it("rejeita círculo fora de 0-9 e lista de classes vazia no banco", async () => {
+  it("rejects out-of-range circles and empty class arrays in the database", async () => {
     const insert = (values: unknown[]) =>
       handle.client.query(
         `INSERT INTO public.magias (
@@ -178,8 +178,8 @@ describe("schema e repositório do catálogo", () => {
   });
 });
 
-describe("migração", () => {
-  it("aplica uma vez e ignora na execução seguinte", async () => {
+describe("database migrations", () => {
+  it("applies each migration only once", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "ars-arcana-migracao-"));
     const connectionString = `pglite:${path.join(directory, "catalogo")}`;
 

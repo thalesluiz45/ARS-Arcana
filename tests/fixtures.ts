@@ -1,6 +1,6 @@
-import type { MagiaImport } from "@/lib/validation/magia";
+import type { SpellImport } from "@/lib/validation/spell";
 
-export function makeSpell(overrides: Partial<MagiaImport> = {}): MagiaImport {
+export function makeSpell(overrides: Partial<SpellImport> = {}): SpellImport {
   return {
     slug: "bola-de-fogo",
     nome: "Bola de Fogo",

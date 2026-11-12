@@ -18,14 +18,14 @@ import { SpellSaveButton } from "@/components/spell-save-dialog";
 import { SpellSchoolIcon } from "@/components/spell-school-icon";
 import { StatePanel } from "@/components/state-panel";
 import { Button } from "@/components/ui/button";
-import { obterSnapshot, salvarSnapshot } from "@/lib/local/spell-cache";
+import { getSpellSnapshot, saveSpellSnapshot } from "@/lib/local/spell-cache";
 import {
   isConcentrationSpell,
-  magiaSchema,
+  spellSchema,
   spellCircleLabel,
   spellComponentsLabel,
-  type Magia,
-} from "@/lib/validation/magia";
+  type Spell,
+} from "@/lib/validation/spell";
 
 type LoadState = "loading" | "ready" | "missing" | "error";
 type SpellSource = "server" | "snapshot";
@@ -76,8 +76,8 @@ function Notice({
   );
 }
 
-export function SpellDetail({ magiaId, from }: { magiaId: string; from: string }) {
-  const [spell, setSpell] = useState<Magia | null>(null);
+export function SpellDetail({ spellId, from }: { spellId: string; from: string }) {
+  const [spell, setSpell] = useState<Spell | null>(null);
   const [status, setStatus] = useState<LoadState>("loading");
   const [source, setSource] = useState<SpellSource | null>(null);
   const [stale, setStale] = useState(false);
@@ -104,7 +104,7 @@ export function SpellDetail({ magiaId, from }: { magiaId: string; from: string }
       let snapshotError: string | null = null;
 
       try {
-        cached = await obterSnapshot(magiaId);
+        cached = await getSpellSnapshot(spellId);
       } catch (cause) {
         snapshotError =
           cause instanceof Error
@@ -127,14 +127,14 @@ export function SpellDetail({ magiaId, from }: { magiaId: string; from: string }
       let remoteLoaded = false;
 
       try {
-        const response = await fetch(`/api/magias/${encodeURIComponent(magiaId)}`, {
+        const response = await fetch(`/api/magias/${encodeURIComponent(spellId)}`, {
           cache: "no-store",
           headers: { accept: "application/json" },
         });
 
         if (response.ok) {
           const payload: unknown = await response.json();
-          const parsed = magiaSchema.safeParse(payload);
+          const parsed = spellSchema.safeParse(payload);
           if (!parsed.success) {
             remoteError = "O catálogo retornou dados em formato inesperado.";
           } else if (!cancelled) {
@@ -147,7 +147,7 @@ export function SpellDetail({ magiaId, from }: { magiaId: string; from: string }
             setErrorMessage(null);
             setSyncNotice(null);
             try {
-              await salvarSnapshot(parsed.data);
+              await saveSpellSnapshot(parsed.data);
             } catch {
               if (!cancelled) {
                 setCacheNotice(
@@ -211,7 +211,7 @@ export function SpellDetail({ magiaId, from }: { magiaId: string; from: string }
     return () => {
       cancelled = true;
     };
-  }, [magiaId, refreshToken]);
+  }, [spellId, refreshToken]);
 
   function retry() {
     setRefreshToken((current) => current + 1);
@@ -342,8 +342,8 @@ export function SpellDetail({ magiaId, from }: { magiaId: string; from: string }
               </ul>
             </div>
             <SpellSaveButton
-              magiaId={spell.id}
-              magiaNome={spell.nome}
+              spellId={spell.id}
+              spellName={spell.nome}
               variant="labelled"
               className="shrink-0 border-gold/45 bg-white/[0.04] text-[#f7f1e2] hover:border-gold hover:bg-white/[0.09] hover:text-white"
             />
