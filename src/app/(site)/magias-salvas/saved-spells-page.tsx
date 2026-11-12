@@ -9,6 +9,7 @@ import {
   Info,
   LibraryBig,
   Loader2,
+  LogIn,
   RefreshCw,
   RotateCcw,
   SearchX,
@@ -27,7 +28,7 @@ import {
   type GrimoireDialogState,
 } from "@/components/grimoire-dialogs";
 import { GrimoireSidebar } from "@/components/grimoire-sidebar";
-import { useLocalData } from "@/components/local-data-provider";
+import { useGrimoireData } from "@/components/grimoire-data-provider";
 import { PageHero } from "@/components/page-hero";
 import { Pagination } from "@/components/pagination";
 import { SpellCard, UnavailableSpellCard } from "@/components/spell-card";
@@ -38,10 +39,7 @@ import { StatePanel } from "@/components/state-panel";
 import { Button } from "@/components/ui/button";
 import { matchesSearch } from "@/lib/search";
 import { SAVED_PAGE_SIZE, type CatalogSort } from "@/lib/validation/catalog";
-import {
-  RESERVED_GRIMOIRE_ID,
-  type Grimoire,
-} from "@/lib/validation/grimoire";
+import type { Grimoire } from "@/lib/validation/grimoire";
 import type { Spell } from "@/lib/validation/spell";
 import { cn } from "@/lib/utils";
 import { useSavedSpellSnapshots } from "./use-saved-spell-snapshots";
@@ -192,9 +190,12 @@ export function SavedSpellsPage({
     error,
     snapshot,
     grimoires,
+    reserved,
     totalUnique,
     refresh,
-  } = useLocalData();
+  } = useGrimoireData();
+
+  const reservedId = reserved?.id ?? null;
 
   const [collection, setCollection] = useState(initialCollection);
   const [query, setQuery] = useState(initialQuery);
@@ -207,7 +208,7 @@ export function SavedSpellsPage({
 
   const collectionExists =
     collection === "todas" ||
-    collection === RESERVED_GRIMOIRE_ID ||
+    (reservedId !== null && collection === reservedId) ||
     grimoires.some((grimoire) => grimoire.id === collection);
   const activeCollection =
     status === "ready" && !collectionExists ? "todas" : collection;
@@ -357,7 +358,7 @@ export function SavedSpellsPage({
     }
   }
 
-  const isReserved = activeCollection === RESERVED_GRIMOIRE_ID;
+  const isReserved = reservedId !== null && activeCollection === reservedId;
   const title =
     activeCollection === "todas"
       ? "Todas as magias salvas"
@@ -368,16 +369,18 @@ export function SavedSpellsPage({
   const collectionKind = activeCollection === "todas" ? "magias salvas" : "magias neste grimório";
   const subtitle =
     status === "loading"
-      ? "Carregando sua coleção local…"
-      : status === "error"
-        ? "Não foi possível carregar sua coleção local."
-        : !readyForData
-          ? "Carregando os detalhes das suas magias…"
-          : filteredEntries.length > 0
-            ? `Mostrando ${rangeStart}–${rangeEnd} de ${filteredEntries.length} ${collectionKind}`
-            : query.trim()
-              ? "Nenhuma magia corresponde à busca."
-              : "Nenhuma magia nesta coleção.";
+      ? "Carregando sua coleção…"
+      : status === "unauthenticated"
+        ? "Entre com sua conta Google para acessar suas magias salvas."
+        : status === "error"
+          ? "Não foi possível carregar sua coleção."
+          : !readyForData
+            ? "Carregando os detalhes das suas magias…"
+            : filteredEntries.length > 0
+              ? `Mostrando ${rangeStart}–${rangeEnd} de ${filteredEntries.length} ${collectionKind}`
+              : query.trim()
+                ? "Nenhuma magia corresponde à busca."
+                : "Nenhuma magia nesta coleção.";
 
   const retryAction = (
     <Button variant="outline" size="sm" onClick={retrySync} disabled={syncing}>
@@ -480,8 +483,9 @@ export function SavedSpellsPage({
                     title="Cópias locais indisponíveis"
                     action={retryAction}
                   >
-                    {cacheError} As referências continuam salvas e serão exibidas novamente
-                    quando o armazenamento local estiver acessível.
+                    {cacheError} As referências continuam salvas na sua conta e os detalhes
+                    disponíveis em cache serão exibidos assim que o armazenamento local estiver
+                    acessível.
                   </SavedNotice>
                 ) : null}
 
@@ -526,7 +530,25 @@ export function SavedSpellsPage({
               </div>
             ) : null}
 
-            {status === "loading" || !readyForData ? (
+            {status === "unauthenticated" ? (
+              <div className="mt-6">
+                <StatePanel
+                  icon={LogIn}
+                  eyebrow="Sessão necessária"
+                  title="Entre para acessar suas magias salvas."
+                  description="Sua coleção fica associada à sua conta Google e disponível em qualquer dispositivo. Nenhum dado local antigo foi importado."
+                  actions={
+                    <Button
+                      render={<Link href="/login" />}
+                      className="bg-forest text-[#f8f1df] hover:bg-forest-deep"
+                    >
+                      <LogIn className="size-4" aria-hidden="true" />
+                      Entrar com Google
+                    </Button>
+                  }
+                />
+              </div>
+            ) : status === "loading" || !readyForData ? (
               status === "error" ? (
                 <div className="mt-6">
                   <StatePanel
@@ -536,7 +558,7 @@ export function SavedSpellsPage({
                     title="Não foi possível abrir suas magias salvas."
                     description={
                       error ??
-                      "O armazenamento local deste navegador não está disponível. Seus grimórios e referências não foram apagados."
+                      "O servidor não respondeu. Seus grimórios e referências não foram apagados."
                     }
                     actions={
                       <Button

@@ -1,11 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
-import {
-  RESERVED_GRIMOIRE_ID,
-  RESERVED_GRIMOIRE_NAME,
-  type Grimoire,
-  type SavedSpell,
-} from "@/lib/validation/grimoire";
+import type { Grimoire, SavedSpell } from "@/lib/validation/grimoire";
 import type { Spell } from "@/lib/validation/spell";
 
 export const LOCAL_DB_NAME = "ars-arcana";
@@ -49,26 +44,6 @@ export function isIndexedDbAvailable(): boolean {
   return typeof indexedDB !== "undefined";
 }
 
-function reservedGrimoire(now = new Date().toISOString()): Grimoire {
-  return {
-    id: RESERVED_GRIMOIRE_ID,
-    nome: RESERVED_GRIMOIRE_NAME,
-    criadaEm: now,
-    atualizadaEm: now,
-    reservada: true,
-  };
-}
-
-async function ensureReservedGrimoire(db: IDBPDatabase<ArsArcanaDB>): Promise<void> {
-  const transaction = db.transaction("listas_salvas", "readwrite");
-  const store = transaction.objectStore("listas_salvas");
-  const existing = await store.get(RESERVED_GRIMOIRE_ID);
-  if (!existing) {
-    await store.put(reservedGrimoire());
-  }
-  await transaction.done;
-}
-
 export function getDatabase(): Promise<IDBPDatabase<ArsArcanaDB>> {
   if (!isIndexedDbAvailable()) {
     return Promise.reject(
@@ -80,7 +55,7 @@ export function getDatabase(): Promise<IDBPDatabase<ArsArcanaDB>> {
 
   if (!databasePromise) {
     databasePromise = openDB<ArsArcanaDB>(LOCAL_DB_NAME, LOCAL_DB_VERSION, {
-      upgrade(db, oldVersion, _newVersion, transaction) {
+      upgrade(db) {
         if (!db.objectStoreNames.contains("listas_salvas")) {
           const store = db.createObjectStore("listas_salvas", { keyPath: "id" });
           store.createIndex("by-nome", "nome");
@@ -96,9 +71,6 @@ export function getDatabase(): Promise<IDBPDatabase<ArsArcanaDB>> {
           const store = db.createObjectStore("cache_magias", { keyPath: "magiaId" });
           store.createIndex("by-expira", "expiresAt");
         }
-        if (oldVersion < 1) {
-          transaction.objectStore("listas_salvas").put(reservedGrimoire());
-        }
       },
       blocked() {
         // A connection from a previous version is keeping the upgrade blocked.
@@ -111,10 +83,6 @@ export function getDatabase(): Promise<IDBPDatabase<ArsArcanaDB>> {
         databasePromise = null;
       },
     })
-      .then(async (db) => {
-        await ensureReservedGrimoire(db);
-        return db;
-      })
       .catch((error) => {
         databasePromise = null;
         throw new LocalStorageError(

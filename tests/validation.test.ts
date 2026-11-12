@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { makeSpell } from "./fixtures";
 import { catalogFilterSchema, parseCatalogFilters } from "@/lib/validation/catalog";
-import { grimoireNameSchema } from "@/lib/validation/grimoire";
+import {
+  grimoireNameSchema,
+  grimoireSnapshotSchema,
+  spellSelectionRequestSchema,
+} from "@/lib/validation/grimoire";
 import {
   isConcentrationSpell,
   spellSchema,
@@ -127,5 +131,77 @@ describe("grimoire names", () => {
     expect(grimoireNameSchema.parse("  Combate  ")).toBe("Combate");
     expect(grimoireNameSchema.safeParse("").success).toBe(false);
     expect(grimoireNameSchema.safeParse("a".repeat(61)).success).toBe(false);
+  });
+});
+
+describe("remote grimoire payloads", () => {
+  const grimoire = {
+    id: "11111111-1111-4111-8111-111111111111",
+    nome: "Combate",
+    criadaEm: NOW,
+    atualizadaEm: NOW,
+    reservada: false,
+  };
+
+  it("accepts a snapshot with named collections, reserved collection, and UUID associations", () => {
+    const parsed = grimoireSnapshotSchema.safeParse({
+      lists: [grimoire, { ...grimoire, id: "22222222-2222-4222-8222-222222222222", nome: "Sem grimório", reservada: true }],
+      namedGrimoires: [{ ...grimoire, total: 1 }],
+      reserved: {
+        ...grimoire,
+        id: "22222222-2222-4222-8222-222222222222",
+        nome: "Sem grimório",
+        reservada: true,
+        total: 0,
+      },
+      totalUnique: 1,
+      associations: [
+        {
+          listaId: grimoire.id,
+          magiaId: "33333333-3333-4333-8333-333333333333",
+          salvaEm: NOW,
+        },
+      ],
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects malformed spell IDs and negative counts", () => {
+    expect(
+      grimoireSnapshotSchema.safeParse({
+        lists: [],
+        namedGrimoires: [{ ...grimoire, total: -1 }],
+        reserved: { ...grimoire, total: 0 },
+        totalUnique: 0,
+        associations: [],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      spellSelectionRequestSchema.safeParse({
+        magiaId: "not-a-uuid",
+        grimoireIds: [],
+        withoutGrimoire: false,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("validates selection requests with UUID collections", () => {
+    expect(
+      spellSelectionRequestSchema.safeParse({
+        magiaId: "33333333-3333-4333-8333-333333333333",
+        grimoireIds: [grimoire.id],
+        withoutGrimoire: false,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      spellSelectionRequestSchema.safeParse({
+        magiaId: "33333333-3333-4333-8333-333333333333",
+        grimoireIds: ["sem-grimorio"],
+        withoutGrimoire: true,
+      }).success,
+    ).toBe(false);
   });
 });

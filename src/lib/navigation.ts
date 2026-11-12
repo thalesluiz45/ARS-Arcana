@@ -1,8 +1,15 @@
 export function safeInternalPath(value: string | null | undefined, fallback = "/"): string {
   if (!value) return fallback;
   if (!value.startsWith("/") || value.startsWith("//")) return fallback;
-  if (/[\u0000-\u001f]/.test(value)) return fallback;
+  if (value.includes("\\") || /[\u0000-\u001f]/.test(value)) return fallback;
   return value;
+}
+
+export function currentLoginHref(): string {
+  if (typeof window === "undefined") return "/login";
+  const current = `${window.location.pathname}${window.location.search}`;
+  const safe = safeInternalPath(current, "/");
+  return safe === "/" ? "/login" : `/login?returnTo=${encodeURIComponent(safe)}`;
 }
 
 export function spellHref(id: string, from: string): string {

@@ -185,12 +185,18 @@ describe("database migrations", () => {
 
     try {
       const first = await runMigrations(connectionString);
-      expect(first.applied).toEqual(["001_create_magias.sql"]);
+      expect(first.applied).toEqual([
+        "001_create_magias.sql",
+        "002_auth_and_grimoires.sql",
+      ]);
       expect(first.skipped).toEqual([]);
 
       const second = await runMigrations(connectionString);
       expect(second.applied).toEqual([]);
-      expect(second.skipped).toEqual(["001_create_magias.sql"]);
+      expect(second.skipped).toEqual([
+        "001_create_magias.sql",
+        "002_auth_and_grimoires.sql",
+      ]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

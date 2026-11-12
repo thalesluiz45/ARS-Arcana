@@ -4,7 +4,7 @@ import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { useLocalData } from "@/components/local-data-provider";
+import { useGrimoireData } from "@/components/grimoire-data-provider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,7 +46,7 @@ export function GrimoireDialogs({
   onCreated?: (grimoire: Grimoire) => void;
   onDeleted?: (id: string) => void;
 }) {
-  const { createGrimoire, renameGrimoire, deleteGrimoire, refresh } = useLocalData();
+  const { createGrimoire, renameGrimoire, deleteGrimoire, refresh } = useGrimoireData();
 
   const [createName, setCreateName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);

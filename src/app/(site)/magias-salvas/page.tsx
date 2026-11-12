@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
+import { loginHref } from "@/lib/auth/redirect";
+import { getSessionUser } from "@/lib/auth/session";
 import { catalogSortSchema, type CatalogSort } from "@/lib/validation/catalog";
 
 import { SavedSpellsPage } from "./saved-spells-page";
@@ -7,7 +10,7 @@ import { SavedSpellsPage } from "./saved-spells-page";
 export const metadata: Metadata = {
   title: "Magias salvas",
   description:
-    "Consulte as magias que você salvou, organize seus grimórios e encontre referências mesmo sem conexão.",
+    "Consulte as magias que você salvou e organize seus grimórios associados à sua conta.",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -20,12 +23,28 @@ function readParam(
   return Array.isArray(value) ? value[0] : value;
 }
 
+function currentPath(input: Record<string, string | string[] | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, item);
+    } else if (value !== undefined) {
+      params.set(key, value);
+    }
+  }
+  const query = params.toString();
+  return query ? `/magias-salvas?${query}` : "/magias-salvas";
+}
+
 export default async function SavedSpellsRoute({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
   const resolved = await searchParams;
+
+  const user = await getSessionUser();
+  if (!user) redirect(loginHref(currentPath(resolved)));
 
   const rawCollection = readParam(resolved, "grimorio")?.trim();
   const collection =

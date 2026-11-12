@@ -29,6 +29,17 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 
+// The provider fetches the session collection once when the site shell mounts.
+// Wait for that response before testing the signed-out save action.
+const grimoireSnapshotResponse = page
+  .waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/grimorios" &&
+      response.request().method() === "GET",
+    { timeout: 30000 },
+  )
+  .catch(() => null);
+
 page.on("pageerror", (error) => pageErrors.push(error.message));
 page.on("console", (message) => {
   if (message.type() === "error") consoleErrors.push(message.text());
@@ -80,42 +91,17 @@ async function waitForBodyText(needle, timeout = 15000) {
     .waitFor({ state: "visible", timeout });
 }
 
-async function navCount(name) {
-  return page.evaluate((collectionName) => {
-    const nav = document.querySelector(
-      'nav[aria-label="Coleções de magias salvas"]',
-    );
-    if (!nav) return null;
-    const buttons = [...nav.querySelectorAll("button")];
-    const button = buttons.find((candidate) =>
-      candidate.textContent?.trim().startsWith(collectionName),
-    );
-    return button ? button.textContent?.trim() : null;
-  }, name);
+async function waitForEnabled(locator, timeout = 15000) {
+  await locator.first().waitFor({ state: "visible", timeout });
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (await locator.first().isEnabled()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("o controle não ficou habilitado a tempo");
 }
 
-async function waitForNavCount(name, count, timeout = 15000) {
-  await page.waitForFunction(
-    ({ name, count }) => {
-      const nav = document.querySelector(
-        'nav[aria-label="Coleções de magias salvas"]',
-      );
-      if (!nav) return false;
-      const buttons = [...nav.querySelectorAll("button")];
-      const button = buttons.find((candidate) =>
-        candidate.textContent?.trim().startsWith(name),
-      );
-      return Boolean(
-        button &&
-        button.textContent?.replace(/\s+/g, " ").trim().endsWith(String(count)),
-      );
-    },
-    { name, count },
-    { timeout },
-  );
-}
-
-async function goto(path, waitUntil = "networkidle") {
+async function goto(path, waitUntil = "domcontentloaded") {
   await page.goto(`${BASE}${path}`, { waitUntil });
 }
 
@@ -130,9 +116,195 @@ async function assertNoHorizontalOverflow(label) {
   );
 }
 
+function decodeReturnTo(url) {
+  const value = new URL(url).searchParams.get("returnTo");
+  assert.ok(value, "URL de login sem returnTo");
+  return decodeURIComponent(value);
+}
+
+function normalizeInternalPath(value) {
+  const url = new URL(value, BASE);
+  const params = new URLSearchParams();
+  for (const [key, param] of url.searchParams) {
+    if (key === "from") {
+      const inner = new URL(param, BASE);
+      params.set(
+        key,
+        `${inner.pathname}?${new URLSearchParams(inner.searchParams).toString()}`,
+      );
+      continue;
+    }
+    params.set(key, param);
+  }
+  return `${url.pathname}?${params.toString()}`;
+}
+
+function assertSameInternalPath(actual, expected, label) {
+  assert.equal(
+    normalizeInternalPath(actual),
+    normalizeInternalPath(expected),
+    `${label}: destino diferente`,
+  );
+}
+
+const OAUTH_PROVIDERS = {
+  google: {
+    id: "google",
+    name: "Google",
+    type: "oidc",
+    signinUrl: `${BASE}/api/auth/signin/google`,
+    callbackUrl: `${BASE}/api/auth/callback/google`,
+  },
+};
+
+/**
+ * Replaces the Auth.js endpoints with local responses so the OAuth button can
+ * be exercised without contacting Google. The sign-in POST is aborted and its
+ * callbackUrl captured, which lets the test verify safe post-login returns.
+ */
+async function interceptOAuth(page) {
+  let callbackUrl = null;
+
+  await page.route(/\/api\/auth\/providers/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(OAUTH_PROVIDERS),
+    }),
+  );
+  await page.route(/\/api\/auth\/csrf/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ csrfToken: "e2e-csrf-token" }),
+    }),
+  );
+  await page.route(/\/api\/auth\/signin\/google/, async (route) => {
+    const body = new URLSearchParams(route.request().postData() ?? "");
+    callbackUrl = body.get("callbackUrl");
+    await route.abort("failed");
+  });
+
+  return {
+    callbackUrl: () => callbackUrl,
+    release: async () => {
+      await page.unroute(/\/api\/auth\/providers/);
+      await page.unroute(/\/api\/auth\/csrf/);
+      await page.unroute(/\/api\/auth\/signin\/google/);
+    },
+  };
+}
+
+async function seedLegacyListData(page, spellId) {
+  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  await page.evaluate(async ({ spellId }) => {
+    const request = indexedDB.open("ars-arcana", 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("listas_salvas")) {
+        const store = db.createObjectStore("listas_salvas", { keyPath: "id" });
+        store.createIndex("by-nome", "nome");
+      }
+      if (!db.objectStoreNames.contains("magias_salvas")) {
+        const store = db.createObjectStore("magias_salvas", {
+          keyPath: ["listaId", "magiaId"],
+        });
+        store.createIndex("by-lista", "listaId");
+        store.createIndex("by-magia", "magiaId");
+      }
+      if (!db.objectStoreNames.contains("cache_magias")) {
+        const store = db.createObjectStore("cache_magias", { keyPath: "magiaId" });
+        store.createIndex("by-expira", "expiresAt");
+      }
+    };
+
+    const db = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const now = new Date().toISOString();
+    const tx = db.transaction(
+      ["listas_salvas", "magias_salvas", "cache_magias"],
+      "readwrite",
+    );
+    tx.objectStore("listas_salvas").put({
+      id: "sem-grimorio",
+      nome: "Sem grimório",
+      criadaEm: now,
+      atualizadaEm: now,
+      reservada: true,
+    });
+    tx.objectStore("listas_salvas").put({
+      id: "legado-combate",
+      nome: "Combate",
+      criadaEm: now,
+      atualizadaEm: now,
+      reservada: false,
+    });
+    tx.objectStore("magias_salvas").put({
+      listaId: "legado-combate",
+      magiaId: spellId,
+      salvaEm: now,
+    });
+    tx.objectStore("cache_magias").put({
+      magiaId: spellId,
+      snapshot: {},
+      cachedAt: now,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    db.close();
+  }, { spellId });
+}
+
+async function readLegacyStorage(page) {
+  return page.evaluate(async () => {
+    const request = indexedDB.open("ars-arcana", 1);
+    const db = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(
+      ["listas_salvas", "magias_salvas", "cache_magias"],
+      "readonly",
+    );
+    const complete = new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    const requestToPromise = (request) =>
+      new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    const [lists, spells, cache] = await Promise.all([
+      requestToPromise(tx.objectStore("listas_salvas").getAll()),
+      requestToPromise(tx.objectStore("magias_salvas").getAll()),
+      requestToPromise(tx.objectStore("cache_magias").getAll()),
+    ]);
+    await complete;
+    db.close();
+    return {
+      lists: lists.map((item) => item.id),
+      spells: spells.length,
+      cache: cache.length,
+    };
+  });
+}
+
+const headerNav = () =>
+  page.getByRole("navigation", { name: "Navegação principal" }).first();
+
 await step("Biblioteca carrega catálogo completo e facetas reais", async () => {
   await goto("/");
-  assert.equal(await page.title(), "Biblioteca de magias");
+  assert.equal(await page.title(), "ARS Arcana — Biblioteca de magias");
   await page
     .getByRole("heading", { name: "A magia está em suas mãos.", exact: true })
     .waitFor();
@@ -150,6 +322,31 @@ await step("Biblioteca carrega catálogo completo e facetas reais", async () => 
     fullPage: false,
   });
 });
+
+await step(
+  "Header mostra apenas Biblioteca, Equipamento e Guia com conta deslogada",
+  async () => {
+    const nav = headerNav();
+    assert.equal(await nav.getByRole("link").count(), 3);
+    await nav.getByRole("link", { name: "Biblioteca de magias", exact: true }).waitFor();
+    await nav.getByRole("link", { name: /^Equipamento/ }).waitFor();
+    await nav.getByRole("link", { name: /^Guia do aventureiro/ }).waitFor();
+    assert.equal(
+      await page.locator("header").getByText("Magias salvas", { exact: false }).count(),
+      0,
+      "o atalho antigo de Magias salvas ainda aparece no header",
+    );
+
+    const account = page.getByRole("link", { name: "Entrar na sua conta" });
+    await account.waitFor();
+    assert.equal(await account.getAttribute("href"), "/login");
+    assert.equal(
+      await page.getByRole("button", { name: "Abrir menu da sua conta" }).count(),
+      0,
+      "menu autenticado apareceu sem sessão",
+    );
+  },
+);
 
 await step("Busca por Enter atualiza URL e resultados", async () => {
   const search = page.getByRole("searchbox", {
@@ -177,6 +374,7 @@ await step("Busca por Enter atualiza URL e resultados", async () => {
 });
 
 let bolaId = null;
+let detailUrl = null;
 await step("Detalhes exibem todos os campos e preservam a origem", async () => {
   await page
     .getByRole("link", { name: "Bola de Fogo", exact: true })
@@ -184,6 +382,7 @@ await step("Detalhes exibem todos os campos e preservam a origem", async () => {
     .click();
   await page.waitForURL(/\/magias\/[0-9a-f-]{36}\?from=/);
   bolaId = new URL(page.url()).pathname.split("/").at(-1);
+  detailUrl = page.url();
   await page
     .getByRole("heading", { name: "Bola de Fogo", exact: true, level: 1 })
     .waitFor();
@@ -202,35 +401,193 @@ await step("Detalhes exibem todos os campos e preservam a origem", async () => {
   });
 });
 
-await step("Salvar em Sem grimório funciona sem conta", async () => {
-  await page.getByRole("button", { name: "Salvar em grimório" }).click();
-  const dialog = page.getByRole("dialog", { name: "Organizar magia" });
-  await dialog.waitFor();
-  await dialog.getByRole("checkbox", { name: /Sem grimório/ }).click();
-  await dialog.getByRole("button", { name: "Salvar", exact: true }).click();
+await step(
+  "Salvar sem sessão leva ao login e preserva o retorno seguro",
+  async () => {
+    const snapshotResponse = await grimoireSnapshotResponse;
+    assert.ok(snapshotResponse, "a coleção remota não respondeu a tempo");
+    assert.equal(snapshotResponse.status(), 401);
+    await page.getByRole("button", { name: "Salvar em grimório" }).click();
+    await page.waitForURL(/\/login\?returnTo=/);
+    const returnTo = decodeReturnTo(page.url());
+    assertSameInternalPath(returnTo, detailUrl, "retorno da magia");
+    await page
+      .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
+      .waitFor();
+
+    const oauth = await interceptOAuth(page);
+    try {
+      await waitForEnabled(page.getByRole("button", { name: "Entrar com Google" }));
+      await page.getByRole("button", { name: "Entrar com Google" }).click();
+      await page
+        .getByRole("alert")
+        .filter({ hasText: "Não foi possível iniciar o login com Google." })
+        .waitFor();
+      assert.ok(oauth.callbackUrl(), "OAuth não recebeu callbackUrl");
+      assertSameInternalPath(
+        oauth.callbackUrl(),
+        returnTo,
+        "callback do OAuth",
+      );
+    } finally {
+      await oauth.release();
+    }
+  },
+);
+
+await step(
+  "Tela de login reproduz a referência sem shell do site e sem senha",
+  async () => {
+    await goto("/login");
+    await page
+      .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
+      .waitFor();
+    await waitForBodyText("Faça login para continuar sua jornada.");
+    await waitForBodyText("Ainda não tem uma conta?");
+    await page.getByRole("button", { name: "Crie uma agora" }).waitFor();
+    await page.getByRole("link", { name: "Voltar para a biblioteca" }).waitFor();
+    assert.equal(await page.locator('input[type="email"], input[type="password"]').count(), 0);
+    assert.equal(await page.locator("header").count(), 0, "login usa o header do site");
+    assert.equal(
+      await page.getByRole("navigation", { name: "Navegação principal" }).count(),
+      0,
+      "login usa a navegação do site",
+    );
+    const html = await page.content();
+    assert.ok(!html.includes("GOOGLE_CLIENT_SECRET"), "nome de segredo exposto no HTML");
+    assert.ok(!html.includes("AUTH_SECRET"), "nome do segredo de sessão exposto no HTML");
+    await page.screenshot({
+      path: `${OUT}/03-login-desktop.png`,
+      fullPage: false,
+    });
+  },
+);
+
+await step("returnTo externo é rejeitado antes do OAuth", async () => {
+  await goto("/login?returnTo=https%3A%2F%2Fevil.example%2Fpwn");
   await page
-    .getByText(/foi salva em Sem grimório/)
-    .first()
-    .waitFor({ timeout: 15000 });
-  await page.getByRole("button", { name: "Nos seus grimórios" }).waitFor();
-  await expectText(
-    page.getByRole("link", { name: /Magias salvas/ }).first(),
-    "1",
-    "contador do cabeçalho",
-  );
+    .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
+    .waitFor();
+
+  const oauth = await interceptOAuth(page);
+  try {
+    await waitForEnabled(page.getByRole("button", { name: "Entrar com Google" }));
+    await page.getByRole("button", { name: "Entrar com Google" }).click();
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "Não foi possível iniciar o login com Google." })
+      .waitFor();
+    assert.equal(oauth.callbackUrl(), "/");
+  } finally {
+    await oauth.release();
+  }
 });
 
-await step("Voltar preserva a busca da Biblioteca", async () => {
-  await page.getByRole("link", { name: "Voltar à biblioteca" }).first().click();
-  await page.waitForURL(/\/\?q=bola\+de\+fogo/);
-  const search = page.getByRole("searchbox", {
-    name: "Buscar magias por nome ou descrição",
+await step("Erro de OAuth mostra mensagem explícita e opção de tentar novamente", async () => {
+  await goto("/login?error=AccessDenied");
+  await expectText(
+    page.getByRole("alert"),
+    "O acesso com Google foi cancelado ou negado.",
+    "mensagem de erro OAuth",
+  );
+  await page.getByRole("button", { name: "Tentar novamente" }).waitFor();
+  await page.screenshot({
+    path: `${OUT}/04-login-error.png`,
+    fullPage: false,
   });
-  assert.equal(await search.inputValue(), "bola de fogo");
-  await page
-    .getByRole("heading", { name: "Bola de Fogo", exact: true })
-    .waitFor();
 });
+
+await step(
+  "Área privada redireciona ao login com o caminho completo de retorno",
+  async () => {
+    const target =
+      "/magias-salvas?grimorio=abc&q=bola&sort=circulo-desc&page=2";
+    await goto(target, "domcontentloaded");
+    await page.waitForURL(/\/login\?returnTo=/);
+    assertSameInternalPath(decodeReturnTo(page.url()), target, "retorno da coleção");
+    await page
+      .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
+      .waitFor();
+  },
+);
+
+await step("APIs privadas recusam sessão ausente ou forjada", async () => {
+  const spellId = "11111111-1111-4111-8111-111111111111";
+  const grimoireId = "22222222-2222-4222-8222-222222222222";
+  const forgedCookie =
+    "authjs.session-token=forged; __Secure-authjs.session-token=forged";
+  const requests = [
+    ["GET", "/api/grimorios?userId=forged-user", undefined],
+    [
+      "POST",
+      "/api/grimorios",
+      { nome: "Invasão", userId: "forged-user" },
+    ],
+    [
+      "PATCH",
+      `/api/grimorios/${grimoireId}`,
+      { nome: "Invasão", userId: "forged-user" },
+    ],
+    ["DELETE", `/api/grimorios/${grimoireId}`, undefined],
+    [
+      "PUT",
+      "/api/magias-salvas",
+      {
+        magiaId: spellId,
+        grimoireIds: [grimoireId],
+        withoutGrimoire: false,
+        userId: "forged-user",
+      },
+    ],
+  ];
+
+  for (const [method, path, body] of requests) {
+    const response = await fetch(`${BASE}${path}`, {
+      method,
+      headers: {
+        accept: "application/json",
+        cookie: forgedCookie,
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    assert.equal(response.status, 401, `${method} ${path} respondeu ${response.status}`);
+    const payload = await response.json();
+    assert.equal(payload.code, "unauthorized", `${method} ${path} não retornou unauthorized`);
+  }
+});
+
+await step(
+  "Placeholders de Equipamento, Guia e Arsenal mantêm o padrão visual",
+  async () => {
+    const pages = [
+      ["/equipamento", "Em breve, seu inventário.", "O inventário ainda está sendo preparado."],
+      ["/guia", "Em breve, novos caminhos.", "O guia ainda está sendo escrito."],
+      ["/arsenal", "Em breve, seu arsenal.", "O arsenal ainda está sendo forjado."],
+    ];
+
+    for (const [path, title, body] of pages) {
+      await goto(path);
+      await page.getByRole("heading", { name: title, exact: true }).waitFor();
+      await waitForBodyText(body);
+      await page.getByRole("link", { name: "Entrar na sua conta" }).waitFor();
+      await assertNoHorizontalOverflow(`${path} desktop`);
+    }
+
+    await goto("/equipamento");
+    assert.equal(
+      await headerNav().getByRole("link", { name: /^Equipamento/ }).getAttribute("aria-current"),
+      "page",
+    );
+    await goto("/guia");
+    assert.equal(
+      await headerNav()
+        .getByRole("link", { name: /^Guia do aventureiro/ })
+        .getAttribute("aria-current"),
+      "page",
+    );
+  },
+);
 
 await step(
   "Filtros combinam classe, círculo 0 e escola com contagens reais",
@@ -298,312 +655,6 @@ await step(
   },
 );
 
-await step(
-  "Magias salvas lista a coleção reservada e cria grimório nomeado",
-  async () => {
-    await goto("/magias-salvas");
-    await page
-      .getByRole("heading", { name: "Todas as magias salvas" })
-      .waitFor();
-    await page
-      .getByRole("heading", { name: "Bola de Fogo", exact: true })
-      .waitFor();
-    await waitForNavCount("Todas as magias", 1);
-    await waitForNavCount("Sem grimório", 1);
-
-    await page
-      .getByRole("button", { name: "Criar grimório", exact: true })
-      .click();
-    const dialog = page.getByRole("dialog", { name: "Criar grimório" });
-    await dialog.waitFor();
-    await page.getByLabel("Nome do grimório").fill("Campanha da Floresta");
-    await dialog.getByRole("button", { name: "Criar grimório" }).click();
-    await page
-      .getByText(/Grimório “Campanha da Floresta” criado/)
-      .first()
-      .waitFor();
-    await page.waitForURL(/grimorio=/);
-    await page.getByRole("heading", { name: "Campanha da Floresta" }).waitFor();
-    await waitForNavCount("Campanha da Floresta", 0);
-    await waitForBodyText("Este grimório ainda está vazio.");
-  },
-);
-
-await step(
-  "Mover de Sem grimório para grimório nomeado respeita exclusividade",
-  async () => {
-    await page.getByRole("button", { name: /^Sem grimório/ }).click();
-    await page
-      .getByRole("heading", { name: "Sem grimório", exact: true })
-      .waitFor();
-    await page
-      .getByRole("button", { name: "Gerenciar grimórios de Bola de Fogo" })
-      .click();
-    const dialog = page.getByRole("dialog", { name: "Organizar magia" });
-    await dialog.waitFor();
-    await dialog
-      .getByRole("checkbox", { name: /Campanha da Floresta/ })
-      .click();
-    const reserved = dialog.getByRole("checkbox", { name: /Sem grimório/ });
-    assert.equal(
-      await reserved.getAttribute("aria-checked"),
-      "false",
-      "Sem grimório continuou marcado",
-    );
-    await dialog.getByRole("button", { name: "Salvar", exact: true }).click();
-    await page
-      .getByText(/foi salva em “Campanha da Floresta”/)
-      .first()
-      .waitFor();
-    await waitForNavCount("Sem grimório", 0);
-    await waitForNavCount("Campanha da Floresta", 1);
-    await page
-      .getByRole("heading", { name: "Sem grimório", exact: true })
-      .waitFor();
-    await waitForBodyText("Sem grimório está vazio.");
-  },
-);
-
-await step("Renomear grimório persiste e atualiza a navegação", async () => {
-  await page
-    .getByRole("button", { name: "Gerenciar o grimório Campanha da Floresta" })
-    .click();
-  await page.getByRole("menuitem", { name: "Renomear" }).click();
-  const dialog = page.getByRole("dialog", { name: "Renomear grimório" });
-  await dialog.waitFor();
-  await page.getByLabel("Nome do grimório").fill("Círculo Dourado");
-  await dialog.getByRole("button", { name: "Salvar nome" }).click();
-  await page
-    .getByText(/Grimório renomeado para “Círculo Dourado”/)
-    .first()
-    .waitFor();
-  await waitForNavCount("Círculo Dourado", 1);
-  await page.getByRole("button", { name: /^Círculo Dourado/ }).click();
-  await page.getByRole("heading", { name: "Círculo Dourado" }).waitFor();
-  await page
-    .getByRole("heading", { name: "Bola de Fogo", exact: true })
-    .waitFor();
-});
-
-await step(
-  "Excluir grimório confirma e move a magia para Sem grimório",
-  async () => {
-    await page
-      .getByRole("button", { name: "Gerenciar o grimório Círculo Dourado" })
-      .click();
-    await page.getByRole("menuitem", { name: "Excluir" }).click();
-    const alert = page.getByRole("alertdialog");
-    await alert.waitFor();
-    await expectText(alert, "Excluir grimório?");
-    await expectText(alert, "Sem grimório");
-    await alert.getByRole("button", { name: "Excluir grimório" }).click();
-    await page
-      .getByText(/excluído/)
-      .first()
-      .waitFor();
-    await page
-      .getByRole("heading", { name: "Todas as magias salvas" })
-      .waitFor();
-    await waitForNavCount("Sem grimório", 1);
-    assert.equal(await navCount("Círculo Dourado"), null);
-    assert.equal(await page.locator("article").count(), 1);
-    await page.getByRole("button", { name: /^Sem grimório/ }).click();
-    await page
-      .getByRole("heading", { name: "Bola de Fogo", exact: true })
-      .waitFor();
-  },
-);
-
-const seedData = await api("/api/magias?limit=6&sort=circulo-desc");
-const seedDataAsc = await api("/api/magias?limit=8&sort=circulo-asc");
-const seedIds = [
-  ...new Set(
-    [...seedData.items, ...seedDataAsc.items]
-      .map((spell) => spell.id)
-      .filter((id) => id !== bolaId),
-  ),
-].slice(0, 10);
-assert.equal(
-  seedIds.length,
-  10,
-  "não foi possível obter 10 magias para semear paginação",
-);
-
-const fakeId = "11111111-1111-4111-8111-111111111111";
-
-await step(
-  "Preparar referências locais adicionais para paginação e offline",
-  async () => {
-    await page.evaluate(
-      async ({ ids, fake, namedSpell }) => {
-        const request = indexedDB.open("ars-arcana");
-        const db = await new Promise((resolve, reject) => {
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        });
-        const tx = db.transaction(
-          ["listas_salvas", "magias_salvas"],
-          "readwrite",
-        );
-        const now = new Date().toISOString();
-        tx.objectStore("listas_salvas").put({
-          id: "grimorio-teste-local",
-          nome: "Grimório de Teste",
-          criadaEm: now,
-          atualizadaEm: now,
-          reservada: false,
-        });
-        const spells = tx.objectStore("magias_salvas");
-        for (const id of ids) {
-          spells.put({ listaId: "sem-grimorio", magiaId: id, salvaEm: now });
-        }
-        spells.put({ listaId: "sem-grimorio", magiaId: fake, salvaEm: now });
-        spells.put({
-          listaId: "grimorio-teste-local",
-          magiaId: namedSpell,
-          salvaEm: now,
-        });
-        await new Promise((resolve, reject) => {
-          tx.oncomplete = resolve;
-          tx.onerror = () => reject(tx.error);
-        });
-        db.close();
-      },
-      { ids: seedIds, fake: fakeId, namedSpell: seedIds[0] },
-    );
-
-    await page.reload({ waitUntil: "networkidle" });
-    await page
-      .getByRole("heading", { name: "Sem grimório", exact: true })
-      .waitFor();
-    await page.waitForTimeout(1500);
-    await waitForBodyText("Mostrando 1–9 de 12 magias neste grimório");
-    await waitForNavCount("Todas as magias", 12);
-    await waitForNavCount("Grimório de Teste", 1);
-    await waitForNavCount("Sem grimório", 12);
-  },
-);
-
-await step(
-  "Magia fora do catálogo permanece como referência sem snapshot",
-  async () => {
-    await waitForBodyText("Referências sem detalhes neste navegador");
-    await waitForBodyText("1 magia salva não possui detalhes disponíveis");
-    await page.getByRole("link", { name: /Página 2/ }).click();
-    await page.waitForURL(/page=2/);
-    await page
-      .getByRole("heading", { name: "Magia não sincronizada" })
-      .waitFor();
-    await page.waitForFunction(
-      (id) => document.body.innerText.includes(id),
-      fakeId,
-    );
-    await page.reload({ waitUntil: "networkidle" });
-    await page
-      .getByRole("heading", { name: "Sem grimório", exact: true })
-      .waitFor();
-    const preserved = await page.evaluate(async (id) => {
-      const request = indexedDB.open("ars-arcana");
-      const db = await new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      const tx = db.transaction("magias_salvas", "readonly");
-      const row = await new Promise((resolve, reject) => {
-        const get = tx.objectStore("magias_salvas").get(["sem-grimorio", id]);
-        get.onsuccess = () => resolve(get.result);
-        get.onerror = () => reject(get.error);
-      });
-      db.close();
-      return Boolean(row);
-    }, fakeId);
-    assert.ok(preserved, "a referência sem snapshot foi removida");
-  },
-);
-
-await step(
-  "Busca local e ordenação por círculo funcionam no conjunto selecionado",
-  async () => {
-    const search = page.getByRole("searchbox", {
-      name: "Pesquisar nas magias salvas",
-    });
-    await search.fill("bola de fogo");
-    await waitForBodyText("Mostrando 1–1 de 1 magias neste grimório");
-    assert.equal(await page.locator("article").count(), 1);
-    await search.fill("termo-inexistente-xyz");
-    await page
-      .getByRole("heading", { name: "Nenhuma magia encontrada." })
-      .waitFor();
-    await page.getByRole("button", { name: "Limpar busca" }).last().click();
-    await waitForBodyText("Mostrando 1–9 de 12 magias neste grimório");
-
-    await page.selectOption("#ordenar-magias-salvas", "circulo-desc");
-    await page.waitForURL(/sort=circulo-desc/);
-    await expectText(page.locator("article").first(), "9º Círculo");
-    await page.selectOption("#ordenar-magias-salvas", "circulo-asc");
-    await page.waitForURL(/sort=circulo-asc/);
-    await expectText(page.locator("article").first(), "Truque");
-  },
-);
-
-await step(
-  "Paginação local preserva o conjunto e mostra o intervalo correto",
-  async () => {
-    await page.selectOption("#ordenar-magias-salvas", "nome-asc");
-    await page.waitForURL((url) => !url.searchParams.has("sort"));
-    await page.getByRole("link", { name: /Próxima página/ }).click();
-    await page.waitForURL(/page=2/);
-    await waitForBodyText("Mostrando 10–12 de 12 magias neste grimório");
-    assert.equal(await page.locator("article").count(), 3);
-    await page.getByRole("link", { name: /Anterior/ }).click();
-    await waitForBodyText("Mostrando 1–9 de 12 magias neste grimório");
-  },
-);
-
-await step(
-  "Snapshots locais aparecem quando o catálogo está indisponível",
-  async () => {
-    await page.route(/\/api\/magias\?ids=/, (route) =>
-      route.abort("internetdisconnected"),
-    );
-    await goto("/magias-salvas?grimorio=sem-grimorio", "domcontentloaded");
-    await page
-      .getByRole("heading", { name: "Sem grimório", exact: true })
-      .waitFor();
-    await page
-      .getByRole("heading", { name: "Bola de Fogo", exact: true })
-      .waitFor({ timeout: 15000 });
-    await page
-      .getByText(/Não foi possível sincronizar os detalhes/)
-      .first()
-      .waitFor();
-    await page
-      .getByText(/cópias disponíveis continuam acessíveis/)
-      .first()
-      .waitFor();
-    await page.unroute(/\/api\/magias\?ids=/);
-  },
-);
-
-await step("Detalhe usa snapshot local quando a API falha", async () => {
-  await page.route(`**/api/magias/${bolaId}`, (route) =>
-    route.abort("internetdisconnected"),
-  );
-  await goto(
-    `/magias/${bolaId}?from=%2Fmagias-salvas%3Fgrimorio%3Dsem-grimorio`,
-    "domcontentloaded",
-  );
-  await page
-    .getByRole("heading", { name: "Bola de Fogo", exact: true, level: 1 })
-    .waitFor({ timeout: 15000 });
-  await page.getByText("Cópia salva neste navegador").waitFor();
-  await page
-    .getByText(/Não foi possível atualizar os detalhes/)
-    .first()
-    .waitFor();
-  await page.unroute(`**/api/magias/${bolaId}`);
-});
-
 await step("ID inválido e UUID inexistente não causam crash", async () => {
   await goto("/magias/nao-e-um-uuid");
   await page
@@ -624,52 +675,40 @@ await step("ID inválido e UUID inexistente não causam crash", async () => {
 });
 
 await step(
-  "Layout estreito mantém navegação, filtros e coleção utilizáveis",
+  "Layout estreito mantém navegação, login e placeholders utilizáveis",
   async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await goto("/");
     await assertNoHorizontalOverflow("biblioteca mobile");
+    await page.getByRole("link", { name: "Entrar na sua conta" }).waitFor();
     await page.getByRole("button", { name: "Abrir menu de navegação" }).click();
-    await page
-      .getByRole("navigation", { name: "Navegação principal" })
-      .last()
-      .waitFor();
-    await page.keyboard.press("Escape");
-
-    await page.getByRole("button", { name: /Filtrar busca/ }).click();
-    const sheet = page
-      .locator('[data-slot="sheet-content"]')
-      .filter({ hasText: "Refinar busca" });
+    const sheet = page.locator('[data-slot="sheet-content"]');
     await sheet.waitFor();
-    await sheet.getByRole("button", { name: "Círculo 0: truques" }).click();
-    await page.waitForURL(/circulo=0/);
-    await page.waitForTimeout(300);
+    await sheet.getByRole("link", { name: "Biblioteca de magias", exact: true }).waitFor();
+    await sheet.getByRole("link", { name: /^Equipamento/ }).waitFor();
+    await sheet.getByRole("link", { name: /^Guia do aventureiro/ }).waitFor();
     await page.keyboard.press("Escape");
-    await assertNoHorizontalOverflow("biblioteca mobile filtrada");
     await page.screenshot({
-      path: `${OUT}/03-library-mobile.png`,
+      path: `${OUT}/05-library-mobile.png`,
       fullPage: false,
     });
 
-    await goto("/magias-salvas?grimorio=sem-grimorio");
+    await goto("/login");
+    await assertNoHorizontalOverflow("login mobile");
+    await waitForEnabled(page.getByRole("button", { name: "Entrar com Google" }));
     await page
-      .getByRole("heading", { name: "Sem grimório", exact: true })
+      .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
       .waitFor();
-    await page.getByRole("button", { name: /Minha coleção/ }).click();
-    const mobileCollection = page.locator("#minha-colecao-mobile");
-    await mobileCollection.waitFor();
-    await mobileCollection
-      .getByRole("button", { name: "Criar grimório", exact: true })
-      .waitFor();
-    await mobileCollection
-      .getByRole("button", { name: /^Grimório de Teste/ })
-      .click();
-    await page.getByRole("heading", { name: "Grimório de Teste" }).waitFor();
-    await assertNoHorizontalOverflow("magias salvas mobile");
     await page.screenshot({
-      path: `${OUT}/04-saved-mobile.png`,
+      path: `${OUT}/06-login-mobile.png`,
       fullPage: false,
     });
+
+    await goto("/equipamento");
+    await page
+      .getByRole("heading", { name: "Em breve, seu inventário.", exact: true })
+      .waitFor();
+    await assertNoHorizontalOverflow("equipamento mobile");
     await page.setViewportSize({ width: 1440, height: 1000 });
   },
 );
@@ -695,6 +734,106 @@ await step("Nenhum erro de página ou console inesperado no fluxo", async () => 
 
 await browser.close();
 
+const legacyBrowser = await launchBrowser();
+const legacyContext = await legacyBrowser.newContext({
+  viewport: { width: 1440, height: 1000 },
+  locale: "pt-BR",
+  reducedMotion: "reduce",
+});
+const legacyPage = await legacyContext.newPage();
+try {
+  await step(
+    "Login detecta dados legados e cancelar preserva os stores",
+    async () => {
+      await seedLegacyListData(legacyPage, bolaId);
+      await legacyPage.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+
+      const loginButton = legacyPage.getByRole("button", {
+        name: "Entrar com Google",
+      });
+      await waitForEnabled(loginButton);
+      await loginButton.click();
+
+      const dialog = legacyPage.getByRole("alertdialog", {
+        name: "Dados antigos neste navegador",
+      });
+      await dialog.waitFor();
+      await expectText(dialog, "1 grimório");
+      await expectText(dialog, "1 magia salva");
+      await expectText(dialog, "não serão importados");
+      await legacyPage.screenshot({
+        path: `${OUT}/07-legacy-confirmation.png`,
+        fullPage: false,
+      });
+
+      await dialog.getByRole("button", { name: "Cancelar" }).click();
+      await dialog.waitFor({ state: "hidden" });
+
+      const storage = await readLegacyStorage(legacyPage);
+      assert.deepEqual(storage.lists.sort(), ["legado-combate", "sem-grimorio"]);
+      assert.equal(storage.spells, 1);
+      assert.equal(storage.cache, 1);
+      assert.equal(
+        await legacyPage.evaluate(() =>
+          localStorage.getItem("ars-arcana:legacy-cleanup-pending"),
+        ),
+        null,
+      );
+    },
+  );
+
+  await step(
+    "Confirmar só marca a limpeza; sem sessão os dados permanecem",
+    async () => {
+      const oauth = await interceptOAuth(legacyPage);
+      try {
+        await legacyPage
+          .getByRole("button", { name: "Entrar com Google" })
+          .click();
+        const dialog = legacyPage.getByRole("alertdialog", {
+          name: "Dados antigos neste navegador",
+        });
+        await dialog.waitFor();
+        await dialog.getByRole("button", { name: "Entrar e apagar" }).click();
+
+        await legacyPage.waitForFunction(
+          () =>
+            localStorage.getItem("ars-arcana:legacy-cleanup-pending") === "1",
+        );
+        await legacyPage
+          .getByRole("alert")
+          .filter({ hasText: "Não foi possível iniciar o login com Google." })
+          .waitFor();
+        assert.equal(oauth.callbackUrl(), "/");
+
+        const afterConfirm = await readLegacyStorage(legacyPage);
+        assert.equal(afterConfirm.spells, 1);
+        assert.equal(afterConfirm.cache, 1);
+
+        await legacyPage.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+        const afterNavigation = await readLegacyStorage(legacyPage);
+        assert.deepEqual(
+          afterNavigation.lists.sort(),
+          ["legado-combate", "sem-grimorio"],
+        );
+        assert.equal(afterNavigation.spells, 1);
+        assert.equal(afterNavigation.cache, 1);
+        assert.equal(
+          await legacyPage.evaluate(() =>
+            localStorage.getItem("ars-arcana:legacy-cleanup-pending"),
+          ),
+          "1",
+          "a limpeza foi consumida sem uma sessão autenticada",
+        );
+      } finally {
+        await oauth.release();
+      }
+    },
+  );
+} finally {
+  await legacyBrowser.close();
+}
+
 const storageBrowser = await launchBrowser();
 const storageContext = await storageBrowser.newContext({
   viewport: { width: 1200, height: 900 },
@@ -709,32 +848,15 @@ await storageContext.addInitScript(() => {
 const storagePage = await storageContext.newPage();
 try {
   await step(
-    "Falha do IndexedDB mostra erro explícito, não coleção vazia",
+    "Falha do IndexedDB não bloqueia a tela de login",
     async () => {
-      await storagePage.goto(`${BASE}/magias-salvas`, {
-        waitUntil: "networkidle",
-      });
+      await storagePage.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
       await storagePage
-        .getByRole("heading", {
-          name: "Não foi possível abrir suas magias salvas.",
-        })
-        .waitFor({
-          timeout: 15000,
-        });
-      const body = await storagePage.locator("main").innerText();
-      assert.ok(body.includes("armazenamento local"), body);
-      assert.ok(
-        !body.includes("Sua coleção ainda está vazia."),
-        "falha exibida como coleção vazia",
-      );
-      await storagePage
-        .getByRole("button", { name: "Tentar novamente" })
-        .first()
+        .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
         .waitFor();
-      await storagePage.screenshot({
-        path: `${OUT}/05-storage-error.png`,
-        fullPage: false,
-      });
+      const button = storagePage.getByRole("button", { name: "Entrar com Google" });
+      await waitForEnabled(button);
+      assert.ok(await button.isVisible(), "ação principal ficou indisponível");
     },
   );
 } finally {
@@ -769,9 +891,36 @@ try {
         "erro exibido como busca vazia",
       );
       await errorPage.screenshot({
-        path: `${OUT}/06-catalog-error.png`,
+        path: `${OUT}/08-catalog-error.png`,
         fullPage: false,
       });
+    },
+  );
+
+  await step(
+    "Login continua acessível sem banco e área privada redireciona",
+    async () => {
+      await errorPage.goto(`${ERROR_BASE}/login`, {
+        waitUntil: "domcontentloaded",
+      });
+      await errorPage
+        .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
+        .waitFor({ timeout: 20000 });
+      await waitForEnabled(
+        errorPage.getByRole("button", { name: "Entrar com Google" }),
+        20000,
+      );
+
+      await errorPage.goto(`${ERROR_BASE}/magias-salvas`, {
+        waitUntil: "domcontentloaded",
+      });
+      await errorPage.waitForURL(/\/login\?returnTo=/);
+      assert.equal(
+        decodeURIComponent(
+          new URL(errorPage.url()).searchParams.get("returnTo") ?? "",
+        ),
+        "/magias-salvas",
+      );
     },
   );
 } finally {

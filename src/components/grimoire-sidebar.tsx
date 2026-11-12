@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { useLocalData } from "@/components/local-data-provider";
+import { useGrimoireData } from "@/components/grimoire-data-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,10 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import {
-  RESERVED_GRIMOIRE_ID,
-  type GrimoireWithCount,
-} from "@/lib/validation/grimoire";
+import type { GrimoireWithCount } from "@/lib/validation/grimoire";
 import { cn } from "@/lib/utils";
 
 type GrimoireSidebarProps = {
@@ -86,7 +83,7 @@ export function GrimoireSidebar({
   onNavigate,
   className,
 }: GrimoireSidebarProps) {
-  const { status, error, grimoires, reserved, totalUnique, refresh } = useLocalData();
+  const { status, error, grimoires, reserved, totalUnique, refresh } = useGrimoireData();
 
   function select(id: string) {
     onSelect(id);
@@ -114,7 +111,7 @@ export function GrimoireSidebar({
         >
           <p className="font-medium text-destructive">Coleção indisponível</p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            {error ?? "Não foi possível acessar os grimórios deste navegador."}
+            {error ?? "Não foi possível acessar os grimórios da sua conta."}
           </p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => void refresh()}>
             <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -209,8 +206,8 @@ export function GrimoireSidebar({
                     icon={Bookmark}
                     label="Sem grimório"
                     total={reserved.total}
-                    selected={selectedId === RESERVED_GRIMOIRE_ID}
-                    onSelect={() => select(RESERVED_GRIMOIRE_ID)}
+                    selected={selectedId === reserved.id}
+                    onSelect={() => select(reserved.id)}
                   />
                 </li>
               ) : null}

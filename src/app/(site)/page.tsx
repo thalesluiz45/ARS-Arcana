@@ -23,7 +23,7 @@ import {
 } from "@/lib/validation/catalog";
 
 export const metadata: Metadata = {
-  title: "ARS Arcana — Biblioteca de magias",
+  title: "Biblioteca de magias",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

@@ -2,9 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 
 import { AppToaster } from "@/components/app-toaster";
-import { LocalDataProvider } from "@/components/local-data-provider";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
 
 import "./globals.css";
 
@@ -47,19 +44,8 @@ export default function RootLayout({
       className={`${inter.variable} ${cormorant.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <LocalDataProvider>
-          <a href="#conteudo" className="skip-link">
-            Pular para o conteúdo
-          </a>
-          <div className="flex min-h-dvh flex-col">
-            <SiteHeader />
-            <main id="conteudo" className="flex-1">
-              {children}
-            </main>
-            <SiteFooter />
-          </div>
-          <AppToaster />
-        </LocalDataProvider>
+        {children}
+        <AppToaster />
       </body>
     </html>
   );
