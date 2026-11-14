@@ -19,7 +19,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="stat-label">{label}</dt>
-      <dd className="mt-1.5 text-[0.8rem] leading-snug text-foreground">{value}</dd>
+      <dd className="mt-1.5 text-[0.8rem] leading-snug text-foreground">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -62,15 +64,6 @@ function WeaponBody({ equipment }: { equipment: WeaponEquipment }) {
         <Stat label="Peso" value={equipmentPesoLabel(equipment)} />
         <Stat label="Custo" value={equipment.custo} />
       </dl>
-
-      <div className="mt-4 rounded-sm border border-gold/25 bg-parchment/60 px-3 py-2.5">
-        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-[#7d5e2a]">
-          Maestria · {equipment.maestria}
-        </p>
-        <p className="mt-1.5 text-[0.76rem] leading-relaxed text-[#3d4a43]">
-          {equipment.maestriaDescricao}
-        </p>
-      </div>
     </>
   );
 }
@@ -87,7 +80,10 @@ function ArmorBody({ equipment }: { equipment: ArmorEquipment }) {
 
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
         <Stat label="Força" value={equipmentForcaLabel(equipment)} />
-        <Stat label="Furtividade" value={equipmentFurtividadeLabel(equipment)} />
+        <Stat
+          label="Furtividade"
+          value={equipmentFurtividadeLabel(equipment)}
+        />
       </dl>
 
       <dl className="mt-auto grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-4">
@@ -149,7 +145,10 @@ export function EquipmentCard({
         <EquipmentIcon equipment={equipment} />
         <div className="min-w-0 flex-1">
           <h3 className="font-heading text-[1.45rem] leading-[1.08] tracking-[-0.01em] text-forest">
-            <Link href={href} className="transition-colors hover:text-[#7d5e2a]">
+            <Link
+              href={href}
+              className="transition-colors hover:text-[#7d5e2a]"
+            >
               {equipment.nome}
             </Link>
           </h3>
