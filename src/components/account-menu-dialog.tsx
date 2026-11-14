@@ -122,23 +122,38 @@ export function AccountMenuDialog({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md overflow-hidden sm:max-w-md">
+          <DialogHeader className="min-w-0">
+            <div className="flex min-w-0 items-center gap-3 pr-6">
               <span className="grid size-11 shrink-0 place-items-center rounded-full border border-gold/40 bg-parchment text-forest">
-                <UserRound className="size-5" strokeWidth={1.6} aria-hidden="true" />
+                <UserRound
+                  className="size-5"
+                  strokeWidth={1.6}
+                  aria-hidden="true"
+                />
               </span>
-              <div className="min-w-0">
-                <DialogTitle className="text-xl text-forest">Sua conta</DialogTitle>
-                <DialogDescription className="mt-1 truncate">
-                  {displayName}
-                  {user.email ? ` · ${user.email}` : ""}
+              <div className="min-w-0 flex-1 text-left">
+                <DialogTitle className="text-xl text-forest">
+                  Sua conta
+                </DialogTitle>
+                <DialogDescription className="mt-1 flex min-w-0 flex-col text-left">
+                  {displayName ? (
+                    <span className="truncate">{displayName}</span>
+                  ) : null}
+                  {user.email ? (
+                    <span className="truncate text-xs" title={user.email}>
+                      {user.email}
+                    </span>
+                  ) : null}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <nav aria-label="Áreas da sua conta" className="mt-1 space-y-1">
+          <nav
+            aria-label="Áreas da sua conta"
+            className="mt-1 min-w-0 space-y-1"
+          >
             <AccountLink
               href="/magias-salvas"
               icon={Bookmark}
@@ -156,12 +171,12 @@ export function AccountMenuDialog({
           </nav>
 
           {error ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="break-words text-sm text-destructive">
               {error}
             </p>
           ) : null}
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button
               variant="destructive"
               onClick={() => void handleSignOut()}

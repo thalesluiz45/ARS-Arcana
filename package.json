@@ -14,7 +14,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:import": "tsx scripts/import-magias.ts",
     "db:import:dry": "tsx scripts/import-magias.ts --dry-run",
-    "db:setup:local": "tsx scripts/migrate.ts && tsx scripts/import-magias.ts"
+    "db:import:equipamentos": "tsx scripts/import-equipamentos.ts",
+    "db:import:equipamentos:dry": "tsx scripts/import-equipamentos.ts --dry-run",
+    "db:setup:local": "tsx scripts/migrate.ts && tsx scripts/import-magias.ts && tsx scripts/import-equipamentos.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

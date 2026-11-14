@@ -1,44 +1,51 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft, Sparkles, Swords } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { PageHero } from "@/components/page-hero";
-import { Button } from "@/components/ui/button";
+import { loginHref } from "@/lib/auth/redirect";
+import { getSessionUser } from "@/lib/auth/session";
+
+import { ArsenalPage } from "./arsenal-page";
 
 export const metadata: Metadata = {
   title: "Arsenal",
+  description:
+    "Consulte os equipamentos que você salvou na sua conta e prepare-se para a próxima aventura.",
 };
 
-export default function ArsenalPage() {
-  return (
-    <>
-      <PageHero
-        eyebrow="Arsenal"
-        title="Em breve, seu arsenal."
-        description="Um espaço para reunir técnicas, recursos e equipamentos que acompanham o seu personagem em cada batalha."
-      />
-      <section className="container-page py-12 sm:py-16">
-        <div className="surface-card mx-auto max-w-2xl px-6 py-12 text-center sm:px-12">
-          <span className="mx-auto grid size-14 place-items-center rounded-full border border-gold/35 bg-parchment text-forest">
-            <Swords className="size-6" strokeWidth={1.5} aria-hidden="true" />
-          </span>
-          <p className="eyebrow mt-6 text-gold">Trabalho em andamento</p>
-          <h2 className="mt-3 text-3xl text-forest">O arsenal ainda está sendo forjado.</h2>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            Enquanto isso, explore a biblioteca de magias e prepare seus próximos encantamentos.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Button render={<Link href="/" />} className="bg-forest text-[#f8f1df] hover:bg-forest/90">
-              <Sparkles className="size-4" aria-hidden="true" />
-              Explorar a biblioteca
-            </Button>
-            <Button variant="outline" render={<Link href="/equipamento" />}>
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Ver equipamento
-            </Button>
-          </div>
-        </div>
-      </section>
-    </>
-  );
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function readParam(
+  input: Record<string, string | string[] | undefined>,
+  key: string,
+): string | undefined {
+  const value = input[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function currentPath(input: Record<string, string | string[] | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, item);
+    } else if (value !== undefined) {
+      params.set(key, value);
+    }
+  }
+  const query = params.toString();
+  return query ? `/arsenal?${query}` : "/arsenal";
+}
+
+export default async function ArsenalRoute({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const resolved = await searchParams;
+
+  const user = await getSessionUser();
+  if (!user) redirect(loginHref(currentPath(resolved)));
+
+  const query = (readParam(resolved, "q") ?? "").trim().slice(0, 120);
+
+  return <ArsenalPage initialQuery={query} />;
 }

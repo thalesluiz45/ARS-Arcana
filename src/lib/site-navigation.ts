@@ -14,7 +14,6 @@ export const SITE_NAV_ITEMS: SiteNavItem[] = [
   {
     href: "/equipamento",
     label: "Equipamento",
-    soon: true,
     match: (pathname) => pathname.startsWith("/equipamento"),
   },
   {

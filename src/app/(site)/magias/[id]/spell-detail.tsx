@@ -6,6 +6,7 @@ import {
   BookOpen,
   Clock3,
   Info,
+  Loader2,
   RefreshCw,
   RotateCcw,
   Sparkles,
@@ -242,6 +243,10 @@ export function SpellDetail({ spellId, from }: { spellId: string; from: string }
           </div>
         </div>
         <div className="container-page py-10">
+          <div className="mb-5 flex items-center gap-2.5 rounded-md border border-gold/30 bg-parchment/70 px-4 py-3 text-sm text-forest">
+            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            Consultando os detalhes da magia no catálogo…
+          </div>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="h-72 animate-pulse rounded-lg border border-border bg-card" />
             <div className="h-72 animate-pulse rounded-lg border border-border bg-card" />

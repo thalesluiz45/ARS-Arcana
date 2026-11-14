@@ -119,7 +119,7 @@ async function assertNoHorizontalOverflow(label) {
 function decodeReturnTo(url) {
   const value = new URL(url).searchParams.get("returnTo");
   assert.ok(value, "URL de login sem returnTo");
-  return decodeURIComponent(value);
+  return value;
 }
 
 function normalizeInternalPath(value) {
@@ -443,8 +443,6 @@ await step(
       .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
       .waitFor();
     await waitForBodyText("Faça login para continuar sua jornada.");
-    await waitForBodyText("Ainda não tem uma conta?");
-    await page.getByRole("button", { name: "Crie uma agora" }).waitFor();
     await page.getByRole("link", { name: "Voltar para a biblioteca" }).waitFor();
     assert.equal(await page.locator('input[type="email"], input[type="password"]').count(), 0);
     assert.equal(await page.locator("header").count(), 0, "login usa o header do site");
@@ -498,16 +496,24 @@ await step("Erro de OAuth mostra mensagem explícita e opção de tentar novamen
 });
 
 await step(
-  "Área privada redireciona ao login com o caminho completo de retorno",
+  "Áreas privadas redirecionam ao login com o caminho completo de retorno",
   async () => {
-    const target =
-      "/magias-salvas?grimorio=abc&q=bola&sort=circulo-desc&page=2";
-    await goto(target, "domcontentloaded");
-    await page.waitForURL(/\/login\?returnTo=/);
-    assertSameInternalPath(decodeReturnTo(page.url()), target, "retorno da coleção");
-    await page
-      .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
-      .waitFor();
+    const targets = [
+      "/magias-salvas?grimorio=abc&q=bola&sort=circulo-desc&page=2",
+      "/arsenal?q=adaga",
+    ];
+    for (const target of targets) {
+      await goto(target, "domcontentloaded");
+      await page.waitForURL(/\/login\?returnTo=/);
+      assertSameInternalPath(
+        decodeReturnTo(page.url()),
+        target,
+        `retorno de ${target}`,
+      );
+      await page
+        .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
+        .waitFor();
+    }
   },
 );
 
@@ -539,6 +545,9 @@ await step("APIs privadas recusam sessão ausente ou forjada", async () => {
         userId: "forged-user",
       },
     ],
+    ["GET", "/api/arsenal?userId=forged-user", undefined],
+    ["POST", "/api/arsenal", { slug: "adaga", userId: "forged-user" }],
+    ["DELETE", "/api/arsenal/adaga", undefined],
   ];
 
   for (const [method, path, body] of requests) {
@@ -557,37 +566,322 @@ await step("APIs privadas recusam sessão ausente ou forjada", async () => {
   }
 });
 
-await step(
-  "Placeholders de Equipamento, Guia e Arsenal mantêm o padrão visual",
-  async () => {
-    const pages = [
-      ["/equipamento", "Em breve, seu inventário.", "O inventário ainda está sendo preparado."],
-      ["/guia", "Em breve, novos caminhos.", "O guia ainda está sendo escrito."],
-      ["/arsenal", "Em breve, seu arsenal.", "O arsenal ainda está sendo forjado."],
-    ];
+await step("Guia permanece como placeholder com o padrão visual", async () => {
+  await goto("/guia");
+  await page
+    .getByRole("heading", { name: "Em breve, novos caminhos.", exact: true })
+    .waitFor();
+  await waitForBodyText("O guia ainda está sendo escrito.");
+  await page.getByRole("link", { name: "Entrar na sua conta" }).waitFor();
+  await assertNoHorizontalOverflow("/guia desktop");
+  assert.equal(
+    await headerNav()
+      .getByRole("link", { name: /^Guia do aventureiro/ })
+      .getAttribute("aria-current"),
+    "page",
+  );
+});
 
-    for (const [path, title, body] of pages) {
-      await goto(path);
-      await page.getByRole("heading", { name: title, exact: true }).waitFor();
-      await waitForBodyText(body);
-      await page.getByRole("link", { name: "Entrar na sua conta" }).waitFor();
-      await assertNoHorizontalOverflow(`${path} desktop`);
-    }
+await step(
+  "Catálogo de equipamentos carrega 174 itens e facetas reais",
+  async () => {
+    const catalog = await api("/api/equipamentos?limit=1");
+    assert.equal(catalog.total, 174);
+    assert.deepEqual(catalog.facets.tipos, [
+      { valor: "arma", total: 38 },
+      { valor: "armadura", total: 13 },
+      { valor: "ferramenta", total: 25 },
+      { valor: "aventura", total: 98 },
+    ]);
+    assert.deepEqual(catalog.facets.armas.tipos, [
+      { valor: "simples", total: 14 },
+      { valor: "marcial", total: 24 },
+    ]);
+    assert.deepEqual(catalog.facets.armas.alcances, [
+      { valor: "corpo-a-corpo", total: 28 },
+      { valor: "distancia", total: 10 },
+    ]);
+    assert.deepEqual(catalog.facets.armaduras, [
+      { valor: "Leve", total: 3 },
+      { valor: "Média", total: 5 },
+      { valor: "Pesada", total: 4 },
+      { valor: "Escudo", total: 1 },
+    ]);
 
     await goto("/equipamento");
-    assert.equal(
-      await headerNav().getByRole("link", { name: /^Equipamento/ }).getAttribute("aria-current"),
-      "page",
+    assert.equal(await page.title(), "ARS Arcana — Equipamento");
+    await page
+      .getByRole("heading", {
+        name: "Prepare-se para qualquer batalha.",
+        exact: true,
+      })
+      .waitFor();
+    await waitForBodyText("174 equipamentos para a sua próxima aventura");
+    assert.equal(await page.locator("article").count(), 12);
+    await page
+      .getByRole("heading", { name: "Armas", exact: true })
+      .waitFor();
+    await expectText(
+      page.locator('section[aria-labelledby="secao-arma"]'),
+      "38 itens",
+      "total da seção Armas",
     );
-    await goto("/guia");
+    await expectText(
+      page.locator("aside").getByRole("button", { name: /^Armas/ }),
+      "38",
+      "contagem da categoria Armas",
+    );
+    assert.equal(
+      await page.locator("#ordenar-equipamentos").inputValue(),
+      "categoria",
+    );
     assert.equal(
       await headerNav()
-        .getByRole("link", { name: /^Guia do aventureiro/ })
+        .getByRole("link", { name: /^Equipamento/ })
         .getAttribute("aria-current"),
       "page",
     );
+    await assertNoHorizontalOverflow("catálogo de equipamentos desktop");
+    await page.screenshot({
+      path: `${OUT}/09-equipment-desktop.png`,
+      fullPage: false,
+    });
   },
 );
+
+await step("Busca de equipamentos atualiza a URL e pode ser limpa", async () => {
+  const search = page.getByRole("searchbox", {
+    name: "Buscar equipamentos por nome, descrição ou categoria",
+  });
+  await search.fill("adaga");
+  await search.press("Enter");
+  await page.waitForURL(/\/equipamento\?q=adaga/);
+
+  const result = await api("/api/equipamentos?q=adaga&limit=1");
+  assert.equal(result.total, 1);
+  await waitForBodyText("1 equipamento para a sua próxima aventura");
+  await page
+    .getByRole("heading", { name: "Adaga", exact: true })
+    .waitFor();
+  assert.equal(await page.locator("article").count(), 1);
+
+  await page.getByRole("button", { name: "Limpar busca" }).click();
+  await page.waitForURL(`${BASE}/equipamento`);
+  await waitForBodyText("174 equipamentos para a sua próxima aventura");
+  assert.equal(await search.inputValue(), "");
+});
+
+await step(
+  "Filtros combinam categoria, tipo de arma e alcance com contagens reais",
+  async () => {
+    await page
+      .locator("aside")
+      .getByRole("button", { name: /^Armas/ })
+      .click();
+    await page.waitForURL(/tipo=arma/);
+
+    const arms = await api("/api/equipamentos?tipo=arma&limit=1");
+    assert.equal(arms.total, 38);
+    await waitForBodyText("38 equipamentos para a sua próxima aventura");
+
+    await page.locator('label[for="arma-marcial"]').click();
+    await page.waitForURL(/arma=marcial/);
+    const marcial = await api(
+      "/api/equipamentos?tipo=arma&arma=marcial&limit=1",
+    );
+    assert.equal(marcial.total, 24);
+    await waitForBodyText("24 equipamentos para a sua próxima aventura");
+
+    await page.locator('label[for="alcance-distancia"]').click();
+    await page.waitForURL(/alcance=distancia/);
+    const ranged = await api(
+      "/api/equipamentos?tipo=arma&arma=marcial&alcance=distancia&limit=50",
+    );
+    assert.equal(ranged.total, 6);
+    await waitForBodyText("6 equipamentos para a sua próxima aventura");
+    assert.equal(await page.locator("article").count(), 6);
+    for (const article of await page.locator("article").all()) {
+      const value = (await article.innerText()).toLocaleLowerCase("pt-BR");
+      assert.ok(
+        value.includes("marcial"),
+        "card fora do filtro de arma marcial",
+      );
+      assert.ok(
+        value.includes("à distância"),
+        "card fora do filtro de alcance",
+      );
+    }
+
+    await page
+      .locator("aside")
+      .getByRole("button", { name: "Limpar", exact: true })
+      .click();
+    await page.waitForURL(`${BASE}/equipamento`);
+    await waitForBodyText("174 equipamentos para a sua próxima aventura");
+  },
+);
+
+await step(
+  "Ordenação e paginação de equipamentos preservam o estado na URL",
+  async () => {
+    const alphabetical = await api("/api/equipamentos?sort=nome-asc&limit=12");
+    assert.equal(alphabetical.items.length, 12);
+
+    await page.selectOption("#ordenar-equipamentos", "nome-asc");
+    await page.waitForURL(/sort=nome-asc/);
+    assert.equal(await page.locator("article").count(), 12);
+    assert.equal(
+      await page.getByRole("heading", { name: "Armas", exact: true }).count(),
+      0,
+    );
+    assert.equal(
+      await page.locator("article h3 a").first().innerText(),
+      alphabetical.items[0].nome,
+    );
+
+    await page.getByRole("link", { name: /Próxima página/ }).click();
+    await page.waitForURL(/page=2/);
+    await waitForBodyText("Mostrando 13–24 de 174");
+    const secondPage = await api(
+      "/api/equipamentos?sort=nome-asc&page=2&limit=12",
+    );
+    assert.equal(
+      await page.locator("article h3 a").first().innerText(),
+      secondPage.items[0].nome,
+    );
+
+    await page.selectOption("#ordenar-equipamentos", "categoria");
+    await page.waitForURL((url) => !url.searchParams.has("sort"));
+    await waitForBodyText("174 equipamentos para a sua próxima aventura");
+  },
+);
+
+await step(
+  "Detalhes exibem os campos específicos de cada subtipo",
+  async () => {
+    const cases = [
+      {
+        slug: "adaga",
+        heading: "Adaga",
+        text: [
+          "1d4",
+          "Perfurante",
+          "Ágil",
+          "Acuidade",
+          "Arremesso (Alcance 6/18)",
+          "0,5 kg",
+          "2 PO",
+          "p. 215",
+        ],
+        screenshot: "10-equipment-detail-weapon.png",
+      },
+      {
+        slug: "couro",
+        heading: "Couro",
+        text: [
+          "11 + modificador de Des",
+          "Sem requisito de Força",
+          "Sem penalidade",
+          "5 kg",
+          "10 PO",
+          "p. 219",
+        ],
+        screenshot: "11-equipment-detail-armor.png",
+      },
+      {
+        slug: "ferramentas-de-carpinteiro",
+        heading: "Ferramentas de Carpinteiro",
+        text: [
+          "Ferramentas de Artesão",
+          "Força",
+          "Selar ou abrir",
+          "Aríete Portável",
+          "3 kg",
+          "8 PO",
+          "p. 220",
+        ],
+        screenshot: "12-equipment-detail-tool.png",
+      },
+      {
+        slug: "acido",
+        heading: "Ácido",
+        text: [
+          "Equipamento de aventura",
+          "2d6",
+          "0,5 kg",
+          "25 PO",
+          "p. 222",
+        ],
+        screenshot: "13-equipment-detail-adventure.png",
+      },
+    ];
+
+    for (const item of cases) {
+      const from = `/equipamento?q=${item.slug}`;
+      await goto(
+        `/equipamento/${item.slug}?from=${encodeURIComponent(from)}`,
+      );
+      await page
+        .getByRole("heading", {
+          name: item.heading,
+          exact: true,
+          level: 1,
+        })
+        .waitFor();
+      for (const needle of item.text) {
+        await waitForBodyText(needle);
+      }
+      await page
+        .getByRole("button", { name: "Salvar no Arsenal" })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("link", { name: "Voltar ao catálogo" })
+          .getAttribute("href"),
+        from,
+        `retorno do detalhe de ${item.slug}`,
+      );
+      await assertNoHorizontalOverflow(`detalhe de ${item.slug}`);
+      await page.screenshot({
+        path: `${OUT}/${item.screenshot}`,
+        fullPage: false,
+      });
+    }
+  },
+);
+
+await step(
+  "Salvar equipamento sem sessão leva ao login preservando o detalhe",
+  async () => {
+    const from = "/equipamento?tipo=arma&arma=marcial";
+    const detail = `/equipamento/arco-longo?from=${encodeURIComponent(from)}`;
+    await goto(detail);
+    await page.getByRole("button", { name: "Salvar no Arsenal" }).click();
+    await page.waitForURL(/\/login\?returnTo=/);
+    assertSameInternalPath(
+      decodeReturnTo(page.url()),
+      detail,
+      "retorno do equipamento",
+    );
+    await page
+      .getByRole("heading", { name: "Bem-vindo de volta!", exact: true })
+      .waitFor();
+  },
+);
+
+await step("Equipamento inexistente e slug inválido não causam crash", async () => {
+  for (const slug of ["nao-existe", "Slug Inválido"]) {
+    await goto(
+      `/equipamento/${encodeURIComponent(slug)}?from=%2Farsenal%3Fq%3Dadaga`,
+    );
+    await page
+      .getByRole("heading", { name: "Este equipamento não foi encontrado." })
+      .waitFor();
+    await page
+      .getByRole("link", { name: "Voltar ao Arsenal" })
+      .waitFor();
+  }
+});
 
 await step(
   "Filtros combinam classe, círculo 0 e escola com contagens reais",
@@ -675,7 +969,7 @@ await step("ID inválido e UUID inexistente não causam crash", async () => {
 });
 
 await step(
-  "Layout estreito mantém navegação, login e placeholders utilizáveis",
+  "Layout estreito mantém navegação, login e catálogo de equipamentos utilizáveis",
   async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await goto("/");
@@ -706,9 +1000,42 @@ await step(
 
     await goto("/equipamento");
     await page
-      .getByRole("heading", { name: "Em breve, seu inventário.", exact: true })
+      .getByRole("heading", {
+        name: "Prepare-se para qualquer batalha.",
+        exact: true,
+      })
       .waitFor();
     await assertNoHorizontalOverflow("equipamento mobile");
+    await page
+      .getByRole("button", { name: /^Filtrar equipamentos/ })
+      .click();
+    const filterSheet = page.locator('[data-slot="sheet-content"]');
+    await filterSheet.waitFor();
+    await filterSheet
+      .getByRole("button", { name: /^Armaduras/ })
+      .click();
+    await page.waitForURL(/tipo=armadura/);
+    await waitForBodyText("13 equipamentos para a sua próxima aventura");
+    await expectText(
+      page.locator('section[aria-labelledby="secao-armadura"]'),
+      "13 itens",
+      "total da seção Armaduras",
+    );
+    await assertNoHorizontalOverflow("catálogo filtrado mobile");
+    await page.screenshot({
+      path: `${OUT}/14-equipment-mobile.png`,
+      fullPage: false,
+    });
+
+    await goto("/equipamento/couro");
+    await page
+      .getByRole("heading", { name: "Couro", exact: true, level: 1 })
+      .waitFor();
+    await assertNoHorizontalOverflow("detalhe de equipamento mobile");
+    await page.screenshot({
+      path: `${OUT}/15-equipment-detail-mobile.png`,
+      fullPage: false,
+    });
     await page.setViewportSize({ width: 1440, height: 1000 });
   },
 );
@@ -894,6 +1221,28 @@ try {
         path: `${OUT}/08-catalog-error.png`,
         fullPage: false,
       });
+
+      await errorPage.goto(`${ERROR_BASE}/equipamento`, {
+        waitUntil: "domcontentloaded",
+      });
+      await errorPage
+        .getByRole("heading", {
+          name: "Não foi possível carregar os equipamentos.",
+        })
+        .waitFor({ timeout: 20000 });
+      const equipmentBody = (
+        await errorPage.locator("main").innerText()
+      ).toLocaleLowerCase("pt-BR");
+      assert.ok(equipmentBody.includes("catálogo indisponível"), equipmentBody);
+
+      await errorPage.goto(`${ERROR_BASE}/equipamento/adaga`, {
+        waitUntil: "domcontentloaded",
+      });
+      await errorPage
+        .getByRole("heading", {
+          name: "Não foi possível abrir este equipamento.",
+        })
+        .waitFor({ timeout: 20000 });
     },
   );
 
@@ -911,20 +1260,147 @@ try {
         20000,
       );
 
-      await errorPage.goto(`${ERROR_BASE}/magias-salvas`, {
-        waitUntil: "domcontentloaded",
-      });
-      await errorPage.waitForURL(/\/login\?returnTo=/);
-      assert.equal(
-        decodeURIComponent(
-          new URL(errorPage.url()).searchParams.get("returnTo") ?? "",
-        ),
-        "/magias-salvas",
-      );
+      for (const target of ["/magias-salvas", "/arsenal"]) {
+        await errorPage.goto(`${ERROR_BASE}${target}`, {
+          waitUntil: "domcontentloaded",
+        });
+        await errorPage.waitForURL(/\/login\?returnTo=/);
+        assert.equal(
+          decodeURIComponent(
+            new URL(errorPage.url()).searchParams.get("returnTo") ?? "",
+          ),
+          target,
+        );
+      }
     },
   );
 } finally {
   await errorBrowser.close();
+}
+
+const AUTH_STATE = process.env.E2E_AUTH_STORAGE_STATE;
+if (AUTH_STATE) {
+  const authBrowser = await launchBrowser();
+  const authContext = await authBrowser.newContext({
+    storageState: AUTH_STATE,
+    viewport: { width: 1440, height: 1000 },
+    locale: "pt-BR",
+    reducedMotion: "reduce",
+  });
+  const authPage = await authContext.newPage();
+  const authPageErrors = [];
+  authPage.on("pageerror", (error) => authPageErrors.push(error.message));
+
+  try {
+    await step(
+      "Arsenal autenticado salva, lista e remove equipamentos",
+      async () => {
+        await authPage.goto(`${BASE}/arsenal`, {
+          waitUntil: "domcontentloaded",
+        });
+        await authPage
+          .getByRole("heading", {
+            name: "Seu Arsenal, pronto para a batalha.",
+            exact: true,
+          })
+          .waitFor();
+
+        const cleanup = await authPage.evaluate(async () => {
+          const response = await fetch("/api/arsenal/adaga", {
+            method: "DELETE",
+            headers: { accept: "application/json" },
+          });
+          return { status: response.status, body: await response.json() };
+        });
+        assert.ok(
+          cleanup.status === 200 || cleanup.status === 404,
+          `limpeza do Arsenal respondeu ${cleanup.status}`,
+        );
+
+        await authPage.goto(`${BASE}/arsenal`, {
+          waitUntil: "domcontentloaded",
+        });
+        await authPage
+          .getByRole("heading", { name: "Itens salvos", exact: true })
+          .waitFor();
+        const beforeSave = await authPage.evaluate(async () => {
+          const response = await fetch("/api/arsenal", {
+            headers: { accept: "application/json" },
+          });
+          return { status: response.status, body: await response.json() };
+        });
+        assert.equal(beforeSave.status, 200);
+        assert.equal(
+          beforeSave.body.items.filter((item) => item.slug === "adaga").length,
+          0,
+        );
+
+        await authPage.goto(
+          `${BASE}/equipamento/adaga?from=%2Fequipamento%3Fq%3Dadaga`,
+          { waitUntil: "domcontentloaded" },
+        );
+        const saveButton = authPage.getByRole("button", {
+          name: "Salvar no Arsenal",
+        });
+        await saveButton.waitFor();
+        await saveButton.click();
+        await authPage
+          .getByRole("button", { name: "Remover do Arsenal" })
+          .waitFor();
+        await authPage
+          .getByText(/foi salvo no seu Arsenal/)
+          .waitFor();
+
+        const afterSave = await authPage.evaluate(async () => {
+          const response = await fetch("/api/arsenal", {
+            headers: { accept: "application/json" },
+          });
+          return { status: response.status, body: await response.json() };
+        });
+        assert.equal(afterSave.status, 200);
+        assert.equal(
+          afterSave.body.items.filter((item) => item.slug === "adaga").length,
+          1,
+        );
+
+        await authPage.goto(`${BASE}/arsenal?q=adaga`, {
+          waitUntil: "domcontentloaded",
+        });
+        await authPage
+          .getByRole("heading", { name: "Adaga", exact: true })
+          .waitFor();
+        await authPage
+          .getByRole("button", { name: /Remover .*Adaga.* do Arsenal/ })
+          .click();
+        await authPage
+          .getByText(/foi removido do seu Arsenal/)
+          .waitFor();
+        await authPage
+          .getByText(/Nenhum item encontrado no Arsenal|Seu Arsenal ainda está vazio/)
+          .first()
+          .waitFor();
+
+        const afterRemove = await authPage.evaluate(async () => {
+          const response = await fetch("/api/arsenal", {
+            headers: { accept: "application/json" },
+          });
+          return { status: response.status, body: await response.json() };
+        });
+        assert.equal(afterRemove.status, 200);
+        assert.equal(
+          afterRemove.body.items.filter((item) => item.slug === "adaga").length,
+          0,
+        );
+        assert.deepEqual(authPageErrors, []);
+      },
+    );
+  } finally {
+    await authBrowser.close();
+  }
+} else {
+  console.log(
+    "SKIP  fluxo autenticado do Arsenal (defina E2E_AUTH_STORAGE_STATE com um storageState do Playwright)",
+  );
 }
 
 const summary = {

@@ -16,6 +16,12 @@ export function spellHref(id: string, from: string): string {
   return `/magias/${encodeURIComponent(id)}?from=${encodeURIComponent(safeInternalPath(from))}`;
 }
 
+export function equipmentHref(slug: string, from: string): string {
+  return `/equipamento/${encodeURIComponent(slug)}?from=${encodeURIComponent(
+    safeInternalPath(from, "/equipamento"),
+  )}`;
+}
+
 export function withSearchParams(
   pathname: string,
   current: URLSearchParams,

@@ -246,6 +246,7 @@ describe("auth and grimoire migrations", () => {
       expect(first.applied).toEqual([
         "001_create_magias.sql",
         "002_auth_and_grimoires.sql",
+        "003_equipment_and_arsenal.sql",
       ]);
 
       const second = await runMigrations(connectionString);
@@ -253,6 +254,7 @@ describe("auth and grimoire migrations", () => {
       expect(second.skipped).toEqual([
         "001_create_magias.sql",
         "002_auth_and_grimoires.sql",
+        "003_equipment_and_arsenal.sql",
       ]);
     } finally {
       await rm(directory, { recursive: true, force: true });

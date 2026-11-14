@@ -27,12 +27,15 @@ import {
 import { LoginBackdrop } from "./login-backdrop";
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
-  AccessDenied: "O acesso com Google foi cancelado ou negado. Tente novamente quando quiser.",
+  AccessDenied:
+    "O acesso com Google foi cancelado ou negado. Tente novamente quando quiser.",
   OAuthAccountNotLinked:
     "Já existe uma conta com este e-mail, mas ela não pôde ser vinculada ao Google. Tente novamente ou use a conta original.",
-  Configuration: "O login com Google ainda não está configurado neste ambiente.",
+  Configuration:
+    "O login com Google ainda não está configurado neste ambiente.",
   OAuthCallback: "O Google retornou uma resposta inválida. Tente novamente.",
-  OAuthCallbackError: "O Google retornou uma resposta inválida. Tente novamente.",
+  OAuthCallbackError:
+    "O Google retornou uma resposta inválida. Tente novamente.",
   Verification: "A verificação de acesso expirou. Tente novamente.",
 };
 
@@ -72,7 +75,11 @@ function Ornament({ className }: { className?: string }) {
     <div className={className} aria-hidden="true">
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[#cdbb92] to-[#cdbb92]" />
-        <svg viewBox="0 0 24 24" className="size-3.5 shrink-0 text-gold" fill="currentColor">
+        <svg
+          viewBox="0 0 24 24"
+          className="size-3.5 shrink-0 text-gold"
+          fill="currentColor"
+        >
           <path d="M12 0 14 10 24 12 14 14 12 24 10 14 0 12 10 10Z" />
         </svg>
         <span className="h-px flex-1 bg-gradient-to-l from-transparent via-[#cdbb92] to-[#cdbb92]" />
@@ -104,7 +111,9 @@ export function LoginForm({
   initialError: string | null;
 }) {
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(() => describeAuthError(initialError));
+  const [error, setError] = useState<string | null>(() =>
+    describeAuthError(initialError),
+  );
   const [legacy, setLegacy] = useState<LegacyListDataSummary | null>(null);
   const [legacyChecked, setLegacyChecked] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -190,7 +199,7 @@ export function LoginForm({
             em suas mãos.
           </p>
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#c8d2c7]">
-            Explore e descubra magias para o seu RPG.
+            Monte seu arsenal, descubra magias para o seu RPG.
           </p>
         </section>
 
@@ -209,17 +218,20 @@ export function LoginForm({
               type="button"
               onClick={requestSignIn}
               disabled={disabled}
-              className="mt-8 flex min-h-[76px] w-full items-center justify-center rounded-lg border border-[#cdbfa2] bg-white/75 px-5 text-[#22302a] shadow-[0_1px_0_rgb(255_255_255/0.8)_inset,0_10px_24px_-18px_rgb(34_48_42/0.55)] transition-colors hover:border-gold/80 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-8 flex min-h-[76px] w-full items-center justify-center rounded-lg border border-[#cdbfa2] bg-white/75 px-5 text-[#22302a] shadow-[0_1px_0_rgb(255_255_255/0.8)_inset,0_10px_24px_-18px_rgb(34_48_42/0.55)] transition-colors hover:border-gold/80 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
             >
               {pending ? (
                 <span className="flex items-center gap-3">
-                  <Loader2 className="size-5 animate-spin text-forest" aria-hidden="true" />
+                  <Loader2
+                    className="size-5 animate-spin text-forest"
+                    aria-hidden="true"
+                  />
                   <span className="font-heading text-[1.3rem] tracking-[0.01em] text-forest sm:text-[1.45rem]">
                     Conectando ao Google…
                   </span>
                 </span>
               ) : (
-                <span className="flex items-center gap-4">
+                <span className="flex items-center gap-4 ">
                   <GoogleMark />
                   <span className="h-9 w-px bg-[#d8ccb5]" aria-hidden="true" />
                   <span className="font-heading text-[1.3rem] tracking-[0.01em] text-forest sm:text-[1.45rem]">
@@ -235,7 +247,10 @@ export function LoginForm({
                 className="mt-5 rounded-md border border-[#b3453a]/30 bg-[#fdf1ed] px-4 py-3 text-sm text-[#7a2c25]"
               >
                 <div className="flex items-start gap-2.5">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <AlertTriangle
+                    className="mt-0.5 size-4 shrink-0"
+                    aria-hidden="true"
+                  />
                   <div>
                     <p className="leading-relaxed">{error}</p>
                     <button
@@ -252,18 +267,6 @@ export function LoginForm({
             ) : null}
 
             <Ornament className="mt-8" />
-
-            <p className="mt-7 text-center text-sm text-[#5b655e]">
-              Ainda não tem uma conta?{" "}
-              <button
-                type="button"
-                onClick={requestSignIn}
-                disabled={disabled}
-                className="font-semibold text-[#143d33] underline-offset-4 hover:underline disabled:opacity-60"
-              >
-                Crie uma agora
-              </button>
-            </p>
           </div>
 
           <p className="mt-5 text-center text-xs text-[#cfd8cd]">
@@ -284,15 +287,19 @@ export function LoginForm({
             <AlertDialogMedia className="bg-[#f4ecdc] text-forest">
               <ShieldAlert className="size-5" aria-hidden="true" />
             </AlertDialogMedia>
-            <AlertDialogTitle className="text-xl">Dados antigos neste navegador</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl">
+              Dados antigos neste navegador
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Encontramos {legacy ? legacySummaryText(legacy) : "dados antigos"} salvos por uma
-              versão anterior. Eles não serão importados para a sua conta e serão apagados deste
-              navegador depois que o login com Google for concluído.
+              Encontramos {legacy ? legacySummaryText(legacy) : "dados antigos"}{" "}
+              salvos por uma versão anterior. Eles não serão importados para a
+              sua conta e serão apagados deste navegador depois que o login com
+              Google for concluído.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Se cancelar, os dados locais permanecem como estão e não são associados à sua conta.
+            Se cancelar, os dados locais permanecem como estão e não são
+            associados à sua conta.
           </p>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>

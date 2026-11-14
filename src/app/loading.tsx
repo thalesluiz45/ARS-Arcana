@@ -1,3 +1,5 @@
+import { Loader2 } from "lucide-react";
+
 export default function Loading() {
   return (
     <div role="status" aria-live="polite">
@@ -9,7 +11,11 @@ export default function Loading() {
         </div>
       </div>
       <div className="container-page py-8 sm:py-10">
-        <div className="h-14 animate-pulse rounded-lg border border-border bg-card" />
+        <div className="flex items-center gap-2.5 rounded-md border border-gold/30 bg-parchment/70 px-4 py-3 text-sm text-forest">
+          <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          Consultando o catálogo de magias no banco de dados…
+        </div>
+        <div className="mt-6 h-14 animate-pulse rounded-lg border border-border bg-card" />
         <div className="mt-8 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
           <div className="hidden space-y-4 lg:block">
             <div className="h-6 w-36 animate-pulse rounded-sm bg-secondary" />
