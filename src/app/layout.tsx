@@ -25,8 +25,21 @@ export const metadata: Metadata = {
     default: "ARS Arcana — Biblioteca de magias",
     template: "ARS Arcana — %s",
   },
-  description:
-    "Explore o catálogo completo de magias, salve seus favoritos e organize grimórios para a sua próxima aventura.",
+  openGraph: {
+    title: "ARS Arcana",
+    description:
+      "Explore o catálogo completo de magias, salve seus favoritos e organize grimórios para a sua próxima aventura.",
+    url: "https://ars-arcana-six.vercel.app/",
+    siteName: "ARS Arcana",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "ARS Arcana Logo",
+      },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

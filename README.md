@@ -24,11 +24,9 @@ O ARS Arcana é um website desenvolvido para reunir e organizar as magias de Dun
 
 - **Catálogo de equipamentos:** consulte os 174 itens — armas, armaduras, ferramentas e itens de aventura — com busca, filtros por categoria e ordenação.
 
-- **Detalhes por subtipo:** veja dano, propriedades e maestria das armas; proteção e requisitos das armaduras; atributos das ferramentas; descrição, peso, custo e página de origem de cada item.
+- **Detalhes por subtipo:** veja dano, propriedades e maestria das armas; proteção e requisitos das armaduras; atributos das ferramentas; descrição, peso e custo de cada item.
 
-- **Arsenal:** entre com Google para salvar equipamentos na sua conta e consultá-los em qualquer dispositivo.
-
-- **Conta:** acesse Magias Salvas, Arsenal e saia da conta pelo menu do cabeçalho.
+- **Conta:** acesse suas Magias Salvas e seu Arsenal.
 
 ## Sobre o projeto
 
