@@ -9,7 +9,7 @@ import { ArsenalPage } from "./arsenal-page";
 export const metadata: Metadata = {
   title: "Arsenal",
   description:
-    "Consulte os equipamentos que você salvou na sua conta e prepare-se para a próxima aventura.",
+    "Consulte os equipamentos que você salvou na sua conta, organize-os em mochilas e prepare-se para a próxima aventura.",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -47,5 +47,9 @@ export default async function ArsenalRoute({
 
   const query = (readParam(resolved, "q") ?? "").trim().slice(0, 120);
 
-  return <ArsenalPage initialQuery={query} />;
+  const rawCollection = readParam(resolved, "mochila")?.trim();
+  const collection =
+    rawCollection && rawCollection.length <= 120 ? rawCollection : "todas";
+
+  return <ArsenalPage initialQuery={query} initialCollection={collection} />;
 }

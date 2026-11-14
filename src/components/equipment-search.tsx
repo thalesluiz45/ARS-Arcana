@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Swords } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useArsenalData } from "@/components/arsenal-data-provider";
 import { SearchInputShell, useSlashShortcut } from "@/components/search-input-shell";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +16,7 @@ export function EquipmentSearchBar({
   currentSearch: string;
 }) {
   const router = useRouter();
+  const { status } = useArsenalData();
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(initialQuery);
 
@@ -35,6 +37,10 @@ export function EquipmentSearchBar({
   }
 
   function arsenalHref() {
+    // Visitantes sem sessão não têm Arsenal: a busca continua no catálogo público.
+    // A sessão só é exigida para salvar o equipamento em uma lista.
+    if (status === "unauthenticated") return buildHref(value);
+
     const trimmed = value.trim();
     return trimmed ? `/arsenal?q=${encodeURIComponent(trimmed)}` : "/arsenal";
   }

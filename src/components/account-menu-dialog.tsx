@@ -165,7 +165,7 @@ export function AccountMenuDialog({
               href="/arsenal"
               icon={Swords}
               label="Arsenal"
-              description="Equipamentos e recursos para a aventura."
+              description="Suas mochilas e equipamentos salvos."
               onNavigate={() => setOpen(false)}
             />
           </nav>

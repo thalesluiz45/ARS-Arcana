@@ -2,10 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { jsonResponse } from "@/lib/api-response";
 import { getSessionUser, unauthorizedResponseBody } from "@/lib/auth/session";
-import {
-  describeArsenalFailure,
-  describeEquipmentFailure,
-} from "@/lib/equipment/errors";
+import { describeArsenalFailure } from "@/lib/equipment/errors";
 import { equipmentRepository } from "@/lib/equipment/repository";
 import { equipmentSlugSchema } from "@/lib/validation/equipment";
 
@@ -35,10 +32,7 @@ export async function DELETE(
     const snapshot = await equipmentRepository.removeItem(user.id, parsedSlug.data);
     return jsonResponse(snapshot);
   } catch (error) {
-    const failure =
-      error instanceof Error && "code" in error && error.code === "not-found"
-        ? describeEquipmentFailure(error)
-        : describeArsenalFailure(error);
+    const failure = describeArsenalFailure(error);
     if (failure.status >= 500) {
       console.error("[api/arsenal] falha ao remover do Arsenal:", error);
     }

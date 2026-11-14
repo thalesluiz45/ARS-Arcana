@@ -1321,7 +1321,7 @@ if (AUTH_STATE) {
           waitUntil: "domcontentloaded",
         });
         await authPage
-          .getByRole("heading", { name: "Itens salvos", exact: true })
+          .getByRole("heading", { name: "Todos os equipamentos salvos", exact: true })
           .waitFor();
         const beforeSave = await authPage.evaluate(async () => {
           const response = await fetch("/api/arsenal", {
@@ -1345,10 +1345,18 @@ if (AUTH_STATE) {
         await saveButton.waitFor();
         await saveButton.click();
         await authPage
-          .getByRole("button", { name: "Remover do Arsenal" })
+          .getByRole("dialog")
+          .getByRole("checkbox", { name: /Sem mochila/ })
+          .click();
+        await authPage
+          .getByRole("dialog")
+          .getByRole("button", { name: "Salvar", exact: true })
+          .click();
+        await authPage
+          .getByRole("button", { name: "No seu Arsenal" })
           .waitFor();
         await authPage
-          .getByText(/foi salvo no seu Arsenal/)
+          .getByText(/foi salvo em Sem mochila/)
           .waitFor();
 
         const afterSave = await authPage.evaluate(async () => {
@@ -1370,10 +1378,18 @@ if (AUTH_STATE) {
           .getByRole("heading", { name: "Adaga", exact: true })
           .waitFor();
         await authPage
-          .getByRole("button", { name: /Remover .*Adaga.* do Arsenal/ })
+          .getByRole("button", { name: /Gerenciar as mochilas de .*Adaga/ })
           .click();
         await authPage
-          .getByText(/foi removido do seu Arsenal/)
+          .getByRole("dialog")
+          .getByRole("checkbox", { name: /Sem mochila/ })
+          .click();
+        await authPage
+          .getByRole("dialog")
+          .getByRole("button", { name: "Salvar", exact: true })
+          .click();
+        await authPage
+          .getByText(/foi removido das suas mochilas/)
           .waitFor();
         await authPage
           .getByText(/Nenhum item encontrado no Arsenal|Seu Arsenal ainda está vazio/)

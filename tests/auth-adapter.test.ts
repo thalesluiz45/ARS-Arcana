@@ -24,6 +24,18 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await handle.exec(
+    await readFile(
+      path.join(process.cwd(), "src", "lib", "db", "migrations", "003_equipment_and_arsenal.sql"),
+      "utf8",
+    ),
+  );
+  await handle.exec(
+    await readFile(
+      path.join(process.cwd(), "src", "lib", "db", "migrations", "004_mochilas.sql"),
+      "utf8",
+    ),
+  );
   adapter = createAuthAdapter(() => handle.client);
 });
 
@@ -48,6 +60,12 @@ describe("Auth.js database adapter", () => {
       [user.id],
     );
     expect(reserved).toEqual([{ nome: "Sem grimório", reservada: true }]);
+
+    const reservedMochila = await handle.client.query<{
+      nome: string;
+      reservada: boolean;
+    }>("SELECT nome, reservada FROM public.mochilas WHERE user_id = $1", [user.id]);
+    expect(reservedMochila).toEqual([{ nome: "Sem mochila", reservada: true }]);
   });
 
   it("looks users up by id and email without case sensitivity", async () => {

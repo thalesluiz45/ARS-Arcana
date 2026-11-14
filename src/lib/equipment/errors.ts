@@ -1,5 +1,6 @@
 import { DatabaseConfigError } from "@/lib/db/factory";
 import { EquipmentRepositoryError } from "@/lib/equipment/repository";
+import { MochilaRepositoryError } from "@/lib/mochilas/repository";
 
 export type EquipmentFailure = {
   status: number;
@@ -38,9 +39,18 @@ export function describeEquipmentFailure(error: unknown): EquipmentFailure {
 }
 
 export function describeArsenalFailure(error: unknown): EquipmentFailure {
-  if (error instanceof EquipmentRepositoryError) {
+  if (
+    error instanceof EquipmentRepositoryError ||
+    error instanceof MochilaRepositoryError
+  ) {
+    const status =
+      error.code === "not-found"
+        ? 404
+        : error.code === "conflict"
+          ? 409
+          : 400;
     return {
-      status: error.code === "not-found" ? 404 : 400,
+      status,
       code: error.code,
       message: error.message,
     };

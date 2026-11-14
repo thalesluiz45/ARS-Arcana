@@ -12,6 +12,7 @@ import { getDb } from "@/lib/db/client";
 import type { DatabaseRow, DbClient } from "@/lib/db/types";
 
 const RESERVED_GRIMOIRE_NAME = "Sem grimório";
+const RESERVED_MOCHILA_NAME = "Sem mochila";
 
 function isUniqueViolation(error: unknown): boolean {
   return Boolean(
@@ -95,10 +96,20 @@ export function createAuthAdapter(getDatabase: () => DbClient): Adapter {
           ), reservado AS (
             INSERT INTO public.grimorios (user_id, nome, reservada)
             SELECT id, $5, true FROM novo
+          ), mochila_reservada AS (
+            INSERT INTO public.mochilas (user_id, nome, reservada)
+            SELECT id, $6, true FROM novo
           )
           SELECT * FROM novo
           `,
-          [user.name ?? null, user.email, user.emailVerified ?? null, user.image ?? null, RESERVED_GRIMOIRE_NAME],
+          [
+            user.name ?? null,
+            user.email,
+            user.emailVerified ?? null,
+            user.image ?? null,
+            RESERVED_GRIMOIRE_NAME,
+            RESERVED_MOCHILA_NAME,
+          ],
         );
         if (!rows[0]) throw new Error("Não foi possível criar a conta.");
         return mapUser(rows[0]);

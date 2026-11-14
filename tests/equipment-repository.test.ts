@@ -4,7 +4,8 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createPgliteHandle, type PgliteHandle } from "@/lib/db/pglite";
-import { EquipmentRepository, EquipmentRepositoryError } from "@/lib/equipment/repository";
+import { EquipmentRepository } from "@/lib/equipment/repository";
+import { MochilaRepositoryError } from "@/lib/mochilas/repository";
 import { upsertEquipmentCatalog } from "@/lib/import/equipment";
 import { parseEquipmentFilters } from "@/lib/validation/equipment";
 
@@ -19,6 +20,7 @@ const MIGRATION_FILES = [
   "001_create_magias.sql",
   "002_auth_and_grimoires.sql",
   "003_equipment_and_arsenal.sql",
+  "004_mochilas.sql",
 ];
 
 let handle: PgliteHandle;
@@ -269,15 +271,16 @@ describe("arsenal repository isolation", () => {
     const other = await createUser("arsenal-outro@example.com");
 
     const afterFirstSave = await repository.saveItem(owner, "adaga");
-    expect(afterFirstSave.total).toBe(1);
+    expect(afterFirstSave.totalUnique).toBe(1);
+    expect(afterFirstSave.reserved.total).toBe(1);
     expect(afterFirstSave.items[0]?.slug).toBe("adaga");
 
     const afterSecondSave = await repository.saveItem(owner, "adaga");
-    expect(afterSecondSave.total).toBe(1);
+    expect(afterSecondSave.totalUnique).toBe(1);
 
     expect(await repository.isSaved(owner, "adaga")).toBe(true);
     expect(await repository.isSaved(other, "adaga")).toBe(false);
-    expect((await repository.getArsenalSnapshot(other)).total).toBe(0);
+    expect((await repository.getArsenalSnapshot(other)).totalUnique).toBe(0);
     expect((await repository.getArsenalSnapshot(other)).items).toEqual([]);
   });
 
@@ -300,7 +303,7 @@ describe("arsenal repository isolation", () => {
     const user = await createUser("arsenal-invalido@example.com");
 
     await expect(repository.saveItem(user, "item-inexistente")).rejects.toBeInstanceOf(
-      EquipmentRepositoryError,
+      MochilaRepositoryError,
     );
     await expect(repository.removeItem(user, "item-inexistente")).rejects.toMatchObject({
       code: "not-found",

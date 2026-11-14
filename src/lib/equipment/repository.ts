@@ -3,19 +3,20 @@ import "server-only";
 import { getDb } from "@/lib/db/client";
 import type { DbClient } from "@/lib/db/types";
 import { mapEquipmentRow } from "@/lib/equipment/mappers";
+import { MochilaRepository } from "@/lib/mochilas/repository";
 import {
   ARMOR_FILTER_DB_VALUES,
   EQUIPMENT_TYPE_ORDER,
   equipmentFacetsSchema,
   equipmentFilterSchema,
   normalizeEquipmentFilters,
-  type ArsenalSnapshot,
   type Equipment,
   type EquipmentFacetValue,
   type EquipmentFilters,
   type EquipmentPage,
   type EquipmentType,
 } from "@/lib/validation/equipment";
+import type { ArsenalSnapshot } from "@/lib/validation/mochila";
 
 const SELECT_COLUMNS = `
   slug,
@@ -100,9 +101,11 @@ function buildWhere(
     params.push(options.savedByUserId);
     conditions.push(
       `EXISTS (
-        SELECT 1 FROM public.arsenal_itens AS arsenal
-        WHERE arsenal.equipamento_id = equipamentos.id
-          AND arsenal.user_id = $${params.length}::uuid
+        SELECT 1
+        FROM public.mochila_itens AS mi
+        JOIN public.mochilas AS m ON m.id = mi.mochila_id
+        WHERE mi.equipamento_id = equipamentos.id
+          AND m.user_id = $${params.length}::uuid
       )`,
     );
   }
@@ -273,71 +276,28 @@ export class EquipmentRepository {
     );
   }
 
+  private mochilas(): MochilaRepository {
+    return new MochilaRepository(this.db);
+  }
+
   async listSavedEquipment(userId: string): Promise<Equipment[]> {
-    const rows = await this.db.query(
-      `SELECT ${SELECT_COLUMNS
-        .split(",")
-        .map((column) => `e.${column.trim()}`)
-        .join(", ")}
-       FROM public.arsenal_itens AS arsenal
-       JOIN public.equipamentos AS e ON e.id = arsenal.equipamento_id
-       WHERE arsenal.user_id = $1
-       ORDER BY ${TYPE_RANK("e")}, e.nome ASC, e.id ASC`,
-      [userId],
-    );
-    return rows.map(mapEquipmentRow);
+    return this.mochilas().listSavedEquipment(userId);
   }
 
   async getArsenalSnapshot(userId: string): Promise<ArsenalSnapshot> {
-    const items = await this.listSavedEquipment(userId);
-    return { items, total: items.length };
+    return this.mochilas().getSnapshot(userId);
   }
 
   async saveItem(userId: string, slug: string): Promise<ArsenalSnapshot> {
-    const id = await this.requireEquipmentId(slug);
-    await this.db.query(
-      `INSERT INTO public.arsenal_itens (user_id, equipamento_id)
-       VALUES ($1, $2)
-       ON CONFLICT (user_id, equipamento_id) DO NOTHING`,
-      [userId, id],
-    );
-    return this.getArsenalSnapshot(userId);
+    return this.mochilas().saveItem(userId, slug);
   }
 
   async removeItem(userId: string, slug: string): Promise<ArsenalSnapshot> {
-    const id = await this.requireEquipmentId(slug);
-    await this.db.query(
-      `DELETE FROM public.arsenal_itens
-       WHERE user_id = $1 AND equipamento_id = $2`,
-      [userId, id],
-    );
-    return this.getArsenalSnapshot(userId);
+    return this.mochilas().removeItem(userId, slug);
   }
 
   async isSaved(userId: string, slug: string): Promise<boolean> {
-    const rows = await this.db.query(
-      `SELECT 1
-       FROM public.arsenal_itens AS arsenal
-       JOIN public.equipamentos AS e ON e.id = arsenal.equipamento_id
-       WHERE arsenal.user_id = $1 AND e.slug = $2`,
-      [userId, slug],
-    );
-    return rows.length > 0;
-  }
-
-  private async requireEquipmentId(slug: string): Promise<string> {
-    const rows = await this.db.query<{ id: string }>(
-      "SELECT id::text AS id FROM public.equipamentos WHERE slug = $1",
-      [slug],
-    );
-    const id = rows[0]?.id;
-    if (!id) {
-      throw new EquipmentRepositoryError(
-        "Equipamento não encontrado no catálogo.",
-        "not-found",
-      );
-    }
-    return id;
+    return this.mochilas().isSaved(userId, slug);
   }
 }
 

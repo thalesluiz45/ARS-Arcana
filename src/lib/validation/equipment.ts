@@ -300,16 +300,6 @@ export type EquipmentPage = {
   typeTotals: EquipmentFacetValue[];
 };
 
-export type ArsenalSnapshot = {
-  items: Equipment[];
-  total: number;
-};
-
-export const arsenalSnapshotSchema = z.object({
-  items: z.array(equipmentSchema),
-  total: z.number().int().nonnegative(),
-});
-
 type SearchParamsInput =
   | Record<string, string | string[] | undefined>
   | URLSearchParams;

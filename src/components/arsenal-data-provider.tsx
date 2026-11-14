@@ -11,11 +11,15 @@ import {
 } from "react";
 
 import { getErrorMessage } from "@/lib/errors";
+import type { Equipment } from "@/lib/validation/equipment";
 import {
-  arsenalSnapshotSchema,
-  type ArsenalSnapshot,
-  type Equipment,
-} from "@/lib/validation/equipment";
+  mochilaSchema,
+  mochilaSnapshotSchema,
+  type EquipmentSelection,
+  type Mochila,
+  type MochilaSnapshot,
+  type MochilaWithCount,
+} from "@/lib/validation/mochila";
 
 export class ArsenalAuthRequiredError extends Error {
   constructor(message = "Sua sessão expirou. Entre novamente para continuar.") {
@@ -29,11 +33,20 @@ type ArsenalStatus = "loading" | "ready" | "unauthenticated" | "error";
 type ArsenalDataContextValue = {
   status: ArsenalStatus;
   error: string | null;
+  snapshot: MochilaSnapshot | null;
+  mochilas: MochilaWithCount[];
+  reserved: MochilaWithCount | null;
   items: Equipment[];
-  total: number;
+  totalUnique: number;
   refresh: () => Promise<void>;
-  save: (slug: string) => Promise<void>;
-  remove: (slug: string) => Promise<void>;
+  createMochila: (name: string) => Promise<Mochila>;
+  renameMochila: (id: string, name: string) => Promise<void>;
+  deleteMochila: (id: string) => Promise<void>;
+  saveEquipmentSelection: (
+    slug: string,
+    selection: EquipmentSelection,
+  ) => Promise<void>;
+  getMochilaIdsForEquipment: (slug: string) => string[];
   isSaved: (slug: string) => boolean;
 };
 
@@ -58,7 +71,7 @@ export function ArsenalDataProvider({
   children: ReactNode;
   authenticated: boolean;
 }) {
-  const [snapshot, setSnapshot] = useState<ArsenalSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<MochilaSnapshot | null>(null);
   const [status, setStatus] = useState<ArsenalStatus>(
     authenticated ? "loading" : "unauthenticated",
   );
@@ -92,7 +105,7 @@ export function ArsenalDataProvider({
         );
       }
 
-      const parsed = arsenalSnapshotSchema.safeParse(await response.json());
+      const parsed = mochilaSnapshotSchema.safeParse(await response.json());
       if (!parsed.success) {
         throw new Error("O servidor retornou o Arsenal em formato inesperado.");
       }
@@ -106,8 +119,8 @@ export function ArsenalDataProvider({
     }
   }, [authenticated]);
 
-  const requestSnapshot = useCallback(
-    async (url: string, init: RequestInit): Promise<ArsenalSnapshot> => {
+  const requestJson = useCallback(
+    async (url: string, init?: RequestInit): Promise<unknown> => {
       let response: Response;
       try {
         response = await fetch(url, {
@@ -115,8 +128,8 @@ export function ArsenalDataProvider({
           ...init,
           headers: {
             accept: "application/json",
-            ...(init.body ? { "content-type": "application/json" } : {}),
-            ...init.headers,
+            ...(init?.body ? { "content-type": "application/json" } : {}),
+            ...init?.headers,
           },
         });
       } catch {
@@ -135,15 +148,11 @@ export function ArsenalDataProvider({
         );
       }
 
-      const parsed = arsenalSnapshotSchema.safeParse(await response.json());
-      if (!parsed.success) {
-        throw new Error("O servidor retornou o Arsenal em formato inesperado.");
+      try {
+        return await response.json();
+      } catch {
+        return null;
       }
-
-      setSnapshot(parsed.data);
-      setStatus("ready");
-      setError(null);
-      return parsed.data;
     },
     [],
   );
@@ -152,47 +161,109 @@ export function ArsenalDataProvider({
     void refresh();
   }, [refresh]);
 
+  const associationsByEquipment = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const association of snapshot?.associations ?? []) {
+      const lists = map.get(association.equipamentoSlug) ?? [];
+      lists.push(association.listaId);
+      map.set(association.equipamentoSlug, lists);
+    }
+    return map;
+  }, [snapshot]);
+
   const savedSlugs = useMemo(
     () => new Set((snapshot?.items ?? []).map((item) => item.slug)),
     [snapshot],
   );
 
-  const isSaved = useCallback(
-    (slug: string) => savedSlugs.has(slug),
-    [savedSlugs],
+  const isSaved = useCallback((slug: string) => savedSlugs.has(slug), [savedSlugs]);
+
+  const getMochilaIdsForEquipment = useCallback(
+    (slug: string) => associationsByEquipment.get(slug) ?? [],
+    [associationsByEquipment],
   );
 
-  const save = useCallback(
-    async (slug: string) => {
-      await requestSnapshot("/api/arsenal", {
+  const createMochila = useCallback(
+    async (name: string) => {
+      const body = await requestJson("/api/mochilas", {
         method: "POST",
-        body: JSON.stringify({ slug }),
+        body: JSON.stringify({ nome: name }),
       });
+      const parsed = mochilaSchema.safeParse(body);
+      if (!parsed.success) {
+        throw new Error("O servidor retornou a mochila em formato inesperado.");
+      }
+      await refresh();
+      return parsed.data;
     },
-    [requestSnapshot],
+    [refresh, requestJson],
   );
 
-  const remove = useCallback(
-    async (slug: string) => {
-      await requestSnapshot(`/api/arsenal/${encodeURIComponent(slug)}`, {
+  const renameMochila = useCallback(
+    async (id: string, name: string) => {
+      await requestJson(`/api/mochilas/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ nome: name }),
+      });
+      await refresh();
+    },
+    [refresh, requestJson],
+  );
+
+  const deleteMochila = useCallback(
+    async (id: string) => {
+      await requestJson(`/api/mochilas/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
+      await refresh();
     },
-    [requestSnapshot],
+    [refresh, requestJson],
+  );
+
+  const saveEquipmentSelection = useCallback(
+    async (slug: string, selection: EquipmentSelection) => {
+      await requestJson("/api/mochilas/itens", {
+        method: "PUT",
+        body: JSON.stringify({
+          slug,
+          mochilaIds: selection.mochilaIds,
+          withoutMochila: selection.withoutMochila,
+        }),
+      });
+      await refresh();
+    },
+    [refresh, requestJson],
   );
 
   const value = useMemo<ArsenalDataContextValue>(
     () => ({
       status,
       error,
+      snapshot,
+      mochilas: snapshot?.namedMochilas ?? [],
+      reserved: snapshot?.reserved ?? null,
       items: snapshot?.items ?? [],
-      total: snapshot?.total ?? 0,
+      totalUnique: snapshot?.totalUnique ?? 0,
       refresh,
-      save,
-      remove,
+      createMochila,
+      renameMochila,
+      deleteMochila,
+      saveEquipmentSelection,
+      getMochilaIdsForEquipment,
       isSaved,
     }),
-    [error, isSaved, refresh, remove, save, snapshot, status],
+    [
+      createMochila,
+      deleteMochila,
+      error,
+      getMochilaIdsForEquipment,
+      isSaved,
+      refresh,
+      renameMochila,
+      saveEquipmentSelection,
+      snapshot,
+      status,
+    ],
   );
 
   return (
