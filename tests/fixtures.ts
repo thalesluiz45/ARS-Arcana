@@ -40,6 +40,8 @@ export function makeWeapon(
     tipoDano: "Cortante",
     propriedades: ["Versátil (1d10)"],
     maestria: "Derrubar",
+    maestriaDescricao:
+      "Quando você acerta uma criatura com esta arma, ela pode ser derrubada.",
     peso: "1,5 kg",
     custo: "15 PO",
     fontePagina: 215,

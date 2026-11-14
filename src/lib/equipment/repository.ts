@@ -27,6 +27,7 @@ const SELECT_COLUMNS = `
   tipo_dano,
   propriedades,
   maestria,
+  maestria_descricao,
   classe_armadura,
   forca,
   furtividade,
@@ -52,6 +53,7 @@ function searchClause(parameter: string): string {
     OR position(${needle} in ${normalizedSearch("coalesce(categoria, '')")}) > 0
     OR position(${needle} in ${normalizedSearch("coalesce(atributo, '')")}) > 0
     OR position(${needle} in ${normalizedSearch("coalesce(maestria, '')")}) > 0
+    OR position(${needle} in ${normalizedSearch("coalesce(maestria_descricao, '')")}) > 0
     OR position(${needle} in ${normalizedSearch("coalesce(tipo_dano, '')")}) > 0
     OR position(${needle} in ${normalizedSearch("array_to_string(propriedades, ' ')")}) > 0
   )`;

@@ -162,6 +162,7 @@ export const weaponEquipmentSchema = z
       .max(20)
       .default([]),
     maestria: masterySchema,
+    maestriaDescricao: z.string().trim().min(1).max(1000),
   })
   .strict();
 
