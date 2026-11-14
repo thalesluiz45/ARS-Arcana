@@ -1,34 +1,34 @@
-import { getDatabase, LocalStorageError, type MagiaCacheRecord } from "@/lib/local/database";
+import { getDatabase, LocalStorageError, type SpellCacheRecord } from "@/lib/local/database";
 import { notifyLocalDataChanged } from "@/lib/local/events";
-import { magiaIdSchema, magiaSchema, type Magia } from "@/lib/validation/magia";
+import { spellIdSchema, spellSchema, type Spell } from "@/lib/validation/spell";
 
 export const SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type CachedSpell = {
-  spell: Magia;
+  spell: Spell;
   cachedAt: string;
   expiresAt: string;
   stale: boolean;
 };
 
 export type CachedSpellState = {
-  spell: Magia | null;
+  spell: Spell | null;
   cachedAt: string | null;
   expiresAt: string | null;
   stale: boolean;
   missing: boolean;
 };
 
-function validateId(magiaId: string): string {
-  const parsed = magiaIdSchema.safeParse(magiaId);
+function validateId(spellId: string): string {
+  const parsed = spellIdSchema.safeParse(spellId);
   if (!parsed.success) {
     throw new LocalStorageError("Identificador de magia inválido.");
   }
   return parsed.data;
 }
 
-function toCachedSpell(record: MagiaCacheRecord): CachedSpell | null {
-  const parsed = magiaSchema.safeParse(record.snapshot);
+function toCachedSpell(record: SpellCacheRecord): CachedSpell | null {
+  const parsed = spellSchema.safeParse(record.snapshot);
   if (!parsed.success) return null;
   return {
     spell: parsed.data,
@@ -38,10 +38,10 @@ function toCachedSpell(record: MagiaCacheRecord): CachedSpell | null {
   };
 }
 
-export async function salvarSnapshot(magia: Magia, ttlMs = SNAPSHOT_TTL_MS): Promise<void> {
-  const parsed = magiaSchema.parse(magia);
+export async function saveSpellSnapshot(spell: Spell, ttlMs = SNAPSHOT_TTL_MS): Promise<void> {
+  const parsed = spellSchema.parse(spell);
   const now = new Date();
-  const record: MagiaCacheRecord = {
+  const record: SpellCacheRecord = {
     magiaId: parsed.id,
     snapshot: parsed,
     cachedAt: now.toISOString(),
@@ -60,14 +60,14 @@ export async function salvarSnapshot(magia: Magia, ttlMs = SNAPSHOT_TTL_MS): Pro
   }
 }
 
-export async function salvarSnapshots(magias: Magia[], ttlMs = SNAPSHOT_TTL_MS): Promise<void> {
-  if (magias.length === 0) return;
+export async function saveSpellSnapshots(spells: Spell[], ttlMs = SNAPSHOT_TTL_MS): Promise<void> {
+  if (spells.length === 0) return;
   try {
     const db = await getDatabase();
     const now = new Date();
     const transaction = db.transaction("cache_magias", "readwrite");
-    for (const magia of magias) {
-      const parsed = magiaSchema.parse(magia);
+    for (const spell of spells) {
+      const parsed = spellSchema.parse(spell);
       transaction.store.put({
         magiaId: parsed.id,
         snapshot: parsed,
@@ -84,8 +84,8 @@ export async function salvarSnapshots(magias: Magia[], ttlMs = SNAPSHOT_TTL_MS):
   }
 }
 
-export async function obterSnapshot(magiaId: string): Promise<CachedSpell | null> {
-  const validId = validateId(magiaId);
+export async function getSpellSnapshot(spellId: string): Promise<CachedSpell | null> {
+  const validId = validateId(spellId);
   try {
     const db = await getDatabase();
     const record = await db.get("cache_magias", validId);
@@ -96,7 +96,7 @@ export async function obterSnapshot(magiaId: string): Promise<CachedSpell | null
   }
 }
 
-export async function obterSnapshots(ids: string[]): Promise<Map<string, CachedSpellState>> {
+export async function getSpellSnapshots(ids: string[]): Promise<Map<string, CachedSpellState>> {
   const validIds = [...new Set(ids)].map(validateId);
   const states = new Map<string, CachedSpellState>();
   for (const id of validIds) {
@@ -133,10 +133,10 @@ export async function obterSnapshots(ids: string[]): Promise<Map<string, CachedS
   }
 }
 
-export async function buscarSpellsNoServidor(
+export async function fetchSpellsFromServer(
   ids: string[],
   options: { signal?: AbortSignal } = {},
-): Promise<Magia[]> {
+): Promise<Spell[]> {
   const validIds = [...new Set(ids)].map(validateId);
   if (validIds.length === 0) return [];
 
@@ -145,7 +145,7 @@ export async function buscarSpellsNoServidor(
     chunks.push(validIds.slice(index, index + 100));
   }
 
-  const spells: Magia[] = [];
+  const spells: Spell[] = [];
   for (const chunk of chunks) {
     const params = new URLSearchParams({ ids: chunk.join(",") });
     const response = await fetch(`/api/magias?${params.toString()}`, {
@@ -165,7 +165,7 @@ export async function buscarSpellsNoServidor(
     }
 
     const payload: unknown = await response.json();
-    const parsed = magiaSchema.array().safeParse(payload);
+    const parsed = spellSchema.array().safeParse(payload);
     if (!parsed.success) {
       throw new Error("O catálogo retornou dados em formato inesperado.");
     }
@@ -175,15 +175,15 @@ export async function buscarSpellsNoServidor(
   return spells;
 }
 
-export async function atualizarSnapshotsDeIds(ids: string[]): Promise<Map<string, Magia>> {
-  const spells = await buscarSpellsNoServidor(ids);
+export async function refreshSpellSnapshots(ids: string[]): Promise<Map<string, Spell>> {
+  const spells = await fetchSpellsFromServer(ids);
   if (spells.length > 0) {
-    await salvarSnapshots(spells);
+    await saveSpellSnapshots(spells);
   }
   return new Map(spells.map((spell) => [spell.id, spell]));
 }
 
-export async function limparSnapshotsExpirados(): Promise<void> {
+export async function clearExpiredSpellSnapshots(): Promise<void> {
   try {
     const db = await getDatabase();
     const transaction = db.transaction("cache_magias", "readwrite");

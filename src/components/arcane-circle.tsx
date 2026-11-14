@@ -1,9 +1,11 @@
 export function ArcaneCircle({ className }: { className?: string }) {
+  // Coordinates are rounded because server and client engines can serialize
+  // floating point trig results differently, which breaks hydration.
   const dots = Array.from({ length: 12 }, (_, index) => {
     const angle = (index * Math.PI * 2) / 12 - Math.PI / 2;
     return {
-      cx: 160 + Math.cos(angle) * 146,
-      cy: 160 + Math.sin(angle) * 146,
+      cx: Math.round((160 + Math.cos(angle) * 146) * 100) / 100,
+      cy: Math.round((160 + Math.sin(angle) * 146) * 100) / 100,
       r: index % 3 === 0 ? 2.6 : 1.6,
     };
   });

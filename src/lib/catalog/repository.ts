@@ -8,7 +8,7 @@ import {
   type CatalogFilters,
   type CatalogPage,
 } from "@/lib/validation/catalog";
-import { magiaSchema, type Magia } from "@/lib/validation/magia";
+import { spellSchema, type Spell } from "@/lib/validation/spell";
 
 import { decodeCursor, encodeCursor } from "./cursor";
 
@@ -80,8 +80,8 @@ function toStringArray(value: unknown): string[] {
   return [];
 }
 
-export function mapMagiaRow(row: DatabaseRow): Magia {
-  return magiaSchema.parse({
+export function mapSpellRow(row: DatabaseRow): Spell {
+  return spellSchema.parse({
     id: row.id,
     slug: row.slug,
     nome: row.nome,
@@ -108,35 +108,35 @@ type FacetQueryRow = { valor: string | number; total: number | string };
 export class CatalogRepository {
   constructor(private readonly db: DbClient) {}
 
-  async getMagiaById(id: string): Promise<Magia | null> {
+  async getSpellById(id: string): Promise<Spell | null> {
     const rows = await this.db.query(`SELECT ${SELECT_COLUMNS} FROM public.magias WHERE id = $1`, [
       id,
     ]);
-    return rows[0] ? mapMagiaRow(rows[0]) : null;
+    return rows[0] ? mapSpellRow(rows[0]) : null;
   }
 
-  async getMagiaBySlug(slug: string): Promise<Magia | null> {
+  async getSpellBySlug(slug: string): Promise<Spell | null> {
     const rows = await this.db.query(
       `SELECT ${SELECT_COLUMNS} FROM public.magias WHERE slug = $1`,
       [slug],
     );
-    return rows[0] ? mapMagiaRow(rows[0]) : null;
+    return rows[0] ? mapSpellRow(rows[0]) : null;
   }
 
-  async listarMagiasPorIds(ids: string[]): Promise<Magia[]> {
+  async listSpellsByIds(ids: string[]): Promise<Spell[]> {
     if (ids.length === 0) return [];
     const uniqueIds = [...new Set(ids)].slice(0, 100);
     const rows = await this.db.query(
       `SELECT ${SELECT_COLUMNS} FROM public.magias WHERE id = ANY($1::uuid[])`,
       [uniqueIds],
     );
-    const byId = new Map(rows.map((row) => [String(row.id), mapMagiaRow(row)]));
+    const byId = new Map(rows.map((row) => [String(row.id), mapSpellRow(row)]));
     return uniqueIds
       .map((id) => byId.get(id))
-      .filter((spell): spell is Magia => Boolean(spell));
+      .filter((spell): spell is Spell => Boolean(spell));
   }
 
-  async buscarMagias(input: CatalogFilters): Promise<CatalogPage> {
+  async searchSpells(input: CatalogFilters): Promise<CatalogPage> {
     const filters = catalogFilterSchema.parse(input);
     const cursorOffset = decodeCursor(filters.cursor);
     const requestedOffset = cursorOffset ?? Math.max(0, (filters.page - 1) * filters.limit);
@@ -156,7 +156,7 @@ export class CatalogRepository {
          LIMIT $5 OFFSET $6`,
         [...filterParams, filters.limit, offset],
       ),
-      this.listarFacetas(),
+      this.listFacets(),
     ]);
 
     const total = Number(countRows[0]?.total ?? 0);
@@ -166,7 +166,7 @@ export class CatalogRepository {
     const previousOffset = Math.max(0, offset - filters.limit);
 
     return {
-      items: dataRows.map(mapMagiaRow),
+      items: dataRows.map(mapSpellRow),
       total,
       page,
       pageSize: filters.limit,
@@ -177,14 +177,14 @@ export class CatalogRepository {
     };
   }
 
-  async listarTipos(): Promise<string[]> {
+  async listSpellSchools(): Promise<string[]> {
     const rows = await this.db.query<{ valor: string }>(
       `SELECT DISTINCT tipo AS valor FROM public.magias ORDER BY tipo`,
     );
     return rows.map((row) => row.valor);
   }
 
-  async listarClasses(): Promise<string[]> {
+  async listClasses(): Promise<string[]> {
     const rows = await this.db.query<{ valor: string }>(
       `SELECT DISTINCT classe AS valor
        FROM public.magias
@@ -194,7 +194,7 @@ export class CatalogRepository {
     return rows.map((row) => row.valor);
   }
 
-  async listarFacetas(): Promise<CatalogFacets> {
+  async listFacets(): Promise<CatalogFacets> {
     const [escolasRows, classesRows, circulosRows] = await Promise.all([
       this.db.query<FacetQueryRow>(
         `SELECT tipo AS valor, count(*)::int AS total
@@ -244,11 +244,11 @@ export function getCatalogRepository(): CatalogRepository {
 }
 
 export const catalogRepository = {
-  getMagiaById: (id: string) => getCatalogRepository().getMagiaById(id),
-  getMagiaBySlug: (slug: string) => getCatalogRepository().getMagiaBySlug(slug),
-  listarMagiasPorIds: (ids: string[]) => getCatalogRepository().listarMagiasPorIds(ids),
-  buscarMagias: (filters: CatalogFilters) => getCatalogRepository().buscarMagias(filters),
-  listarTipos: () => getCatalogRepository().listarTipos(),
-  listarClasses: () => getCatalogRepository().listarClasses(),
-  listarFacetas: () => getCatalogRepository().listarFacetas(),
+  getSpellById: (id: string) => getCatalogRepository().getSpellById(id),
+  getSpellBySlug: (slug: string) => getCatalogRepository().getSpellBySlug(slug),
+  listSpellsByIds: (ids: string[]) => getCatalogRepository().listSpellsByIds(ids),
+  searchSpells: (filters: CatalogFilters) => getCatalogRepository().searchSpells(filters),
+  listSpellSchools: () => getCatalogRepository().listSpellSchools(),
+  listClasses: () => getCatalogRepository().listClasses(),
+  listFacets: () => getCatalogRepository().listFacets(),
 };

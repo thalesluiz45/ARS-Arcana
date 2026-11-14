@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { Magia } from "./magia";
+import type { Spell } from "./spell";
 
 export const CATALOG_PAGE_SIZE = 12;
 export const SAVED_PAGE_SIZE = 9;
@@ -47,7 +47,7 @@ export const catalogFacetsSchema = z.object({
 export type CatalogFacets = z.infer<typeof catalogFacetsSchema>;
 
 export type CatalogPage = {
-  items: Magia[];
+  items: Spell[];
   total: number;
   page: number;
   pageSize: number;

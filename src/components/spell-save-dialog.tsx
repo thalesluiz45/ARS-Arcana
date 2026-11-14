@@ -1,10 +1,14 @@
 "use client";
 
 import { Bookmark, BookmarkCheck, Loader2, Plus, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { useLocalData } from "@/components/local-data-provider";
+import {
+  AuthRequiredError,
+  useGrimoireData,
+} from "@/components/grimoire-data-provider";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -16,24 +20,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { RESERVED_GRIMOIRE_ID } from "@/lib/validation/grimoire";
+import { currentLoginHref } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-function associationKey(magiaId: string) {
-  return `spell-dialog:${magiaId}`;
+function associationKey(spellId: string) {
+  return `spell-dialog:${spellId}`;
 }
 
 export function SpellSaveDialog({
   open,
   onOpenChange,
-  magiaId,
-  magiaNome,
+  spellId,
+  spellName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  magiaId: string;
-  magiaNome: string;
+  spellId: string;
+  spellName: string;
 }) {
+  const router = useRouter();
   const {
     status,
     error,
@@ -43,7 +48,7 @@ export function SpellSaveDialog({
     createGrimoire,
     saveSpellSelection,
     getGrimoireIdsForSpell,
-  } = useLocalData();
+  } = useGrimoireData();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [includeReserved, setIncludeReserved] = useState(false);
   const [newName, setNewName] = useState("");
@@ -52,18 +57,30 @@ export function SpellSaveDialog({
   const [inlineError, setInlineError] = useState<string | null>(null);
 
   const getIdsRef = useRef(getGrimoireIdsForSpell);
+  const namedIdsRef = useRef<Set<string>>(new Set());
+  const reservedIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     getIdsRef.current = getGrimoireIdsForSpell;
   }, [getGrimoireIdsForSpell]);
 
   useEffect(() => {
+    namedIdsRef.current = new Set(grimoires.map((grimoire) => grimoire.id));
+  }, [grimoires]);
+
+  useEffect(() => {
+    reservedIdRef.current = reserved?.id ?? null;
+  }, [reserved]);
+
+  useEffect(() => {
     if (!open || status !== "ready") return;
-    const current = getIdsRef.current(magiaId);
-    setSelectedIds(new Set(current.filter((id) => id !== RESERVED_GRIMOIRE_ID)));
-    setIncludeReserved(current.includes(RESERVED_GRIMOIRE_ID));
+    const current = getIdsRef.current(spellId);
+    const namedIds = namedIdsRef.current;
+    setSelectedIds(new Set(current.filter((id) => namedIds.has(id))));
+    setIncludeReserved(Boolean(reservedIdRef.current && current.includes(reservedIdRef.current)));
     setNewName("");
     setInlineError(null);
-  }, [open, magiaId, status]);
+  }, [open, spellId, status]);
 
   function toggleNamed(id: string) {
     setSelectedIds((previous) => {
@@ -90,6 +107,11 @@ export function SpellSaveDialog({
       setNewName("");
       toast.success(`Grimório “${created.nome}” criado.`);
     } catch (cause) {
+      if (cause instanceof AuthRequiredError) {
+        onOpenChange(false);
+        router.push(currentLoginHref());
+        return;
+      }
       const message =
         cause instanceof Error ? cause.message : "Não foi possível criar o grimório.";
       setInlineError(message);
@@ -103,27 +125,32 @@ export function SpellSaveDialog({
     setSaving(true);
     setInlineError(null);
     try {
-      await saveSpellSelection(magiaId, {
-        grimorioIds: [...selectedIds],
-        semGrimorio: includeReserved,
+      await saveSpellSelection(spellId, {
+        grimoireIds: [...selectedIds],
+        withoutGrimoire: includeReserved,
       });
       const total = selectedIds.size + (includeReserved ? 1 : 0);
       if (total === 0) {
-        toast.success(`“${magiaNome}” foi removida dos seus grimórios.`);
+        toast.success(`“${spellName}” foi removida dos seus grimórios.`);
       } else if (includeReserved) {
-        toast.success(`“${magiaNome}” foi salva em Sem grimório.`);
+        toast.success(`“${spellName}” foi salva em Sem grimório.`);
       } else {
         const names = grimoires
           .filter((grimoire) => selectedIds.has(grimoire.id))
           .map((grimoire) => grimoire.nome);
         toast.success(
           names.length === 1
-            ? `“${magiaNome}” foi salva em “${names[0]}”.`
-            : `“${magiaNome}” foi salva em ${total} grimórios.`,
+            ? `“${spellName}” foi salva em “${names[0]}”.`
+            : `“${spellName}” foi salva em ${total} grimórios.`,
         );
       }
       onOpenChange(false);
     } catch (cause) {
+      if (cause instanceof AuthRequiredError) {
+        onOpenChange(false);
+        router.push(currentLoginHref());
+        return;
+      }
       const message =
         cause instanceof Error ? cause.message : "Não foi possível salvar a magia.";
       setInlineError(message);
@@ -137,11 +164,11 @@ export function SpellSaveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" data-testid={associationKey(magiaId)}>
+      <DialogContent className="sm:max-w-md" data-testid={associationKey(spellId)}>
         <DialogHeader>
           <DialogTitle className="text-xl">Organizar magia</DialogTitle>
           <DialogDescription>
-            Escolha onde guardar <strong className="font-medium text-foreground">{magiaNome}</strong>.
+            Escolha onde guardar <strong className="font-medium text-foreground">{spellName}</strong>.
             Você pode marcar vários grimórios nomeados.
           </DialogDescription>
         </DialogHeader>
@@ -153,11 +180,30 @@ export function SpellSaveDialog({
           </div>
         ) : null}
 
+        {status === "unauthenticated" ? (
+          <div role="alert" className="rounded-md border border-gold/35 bg-parchment/70 px-4 py-4 text-sm">
+            <p className="font-medium text-forest">Entre para salvar suas magias</p>
+            <p className="mt-1 text-muted-foreground">
+              Sua coleção fica associada à sua conta Google e disponível em qualquer dispositivo.
+            </p>
+            <Button
+              size="sm"
+              className="mt-3 bg-forest text-[#f8f1df] hover:bg-forest-deep"
+              onClick={() => {
+                onOpenChange(false);
+                router.push(currentLoginHref());
+              }}
+            >
+              Entrar com Google
+            </Button>
+          </div>
+        ) : null}
+
         {status === "error" ? (
           <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-4 text-sm">
-            <p className="font-medium text-destructive">Armazenamento local indisponível</p>
+            <p className="font-medium text-destructive">Coleção indisponível</p>
             <p className="mt-1 text-muted-foreground">
-              {error ?? "Não foi possível acessar os grimórios deste navegador."}
+              {error ?? "Não foi possível acessar os grimórios da sua conta."}
             </p>
             <Button variant="outline" size="sm" className="mt-3" onClick={() => void refresh()}>
               <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -296,31 +342,40 @@ export function SpellSaveDialog({
 }
 
 export function SpellSaveButton({
-  magiaId,
-  magiaNome,
+  spellId,
+  spellName,
   variant = "icon",
   className,
   ariaLabel,
 }: {
-  magiaId: string;
-  magiaNome: string;
+  spellId: string;
+  spellName: string;
   variant?: "icon" | "labelled";
   className?: string;
   ariaLabel?: string;
 }) {
-  const { isSpellSaved } = useLocalData();
+  const router = useRouter();
+  const { status, isSpellSaved } = useGrimoireData();
   const [open, setOpen] = useState(false);
-  const saved = isSpellSaved(magiaId);
+  const saved = isSpellSaved(spellId);
+
+  function handleOpen() {
+    if (status === "unauthenticated") {
+      router.push(currentLoginHref());
+      return;
+    }
+    setOpen(true);
+  }
 
   return (
     <>
       {variant === "icon" ? (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={handleOpen}
           aria-label={
             ariaLabel ??
-            (saved ? `Gerenciar grimórios de ${magiaNome}` : `Salvar “${magiaNome}” em um grimório`)
+            (saved ? `Gerenciar grimórios de ${spellName}` : `Salvar “${spellName}” em um grimório`)
           }
           aria-haspopup="dialog"
           className={cn(
@@ -339,7 +394,7 @@ export function SpellSaveButton({
       ) : (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={handleOpen}
           aria-haspopup="dialog"
           className={cn(
             "inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-forest transition-colors hover:border-gold/60 hover:bg-secondary/60",
@@ -358,8 +413,8 @@ export function SpellSaveButton({
       <SpellSaveDialog
         open={open}
         onOpenChange={setOpen}
-        magiaId={magiaId}
-        magiaNome={magiaNome}
+        spellId={spellId}
+        spellName={spellName}
       />
     </>
   );

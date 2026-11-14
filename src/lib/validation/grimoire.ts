@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+// Legacy IndexedDB reserved collection. Remote collections use real UUIDs and
+// are identified by the `reservada` flag returned by the server.
 export const RESERVED_GRIMOIRE_ID = "sem-grimorio";
 export const RESERVED_GRIMOIRE_NAME = "Sem grimório";
 
@@ -19,6 +21,12 @@ export const grimoireSchema = z.object({
 
 export type Grimoire = z.infer<typeof grimoireSchema>;
 
+export const grimoireWithCountSchema = grimoireSchema.extend({
+  total: z.number().int().nonnegative(),
+});
+
+export type GrimoireWithCount = z.infer<typeof grimoireWithCountSchema>;
+
 export const savedSpellSchema = z.object({
   listaId: z.string().min(1),
   magiaId: z.uuid(),
@@ -26,6 +34,27 @@ export const savedSpellSchema = z.object({
 });
 
 export type SavedSpell = z.infer<typeof savedSpellSchema>;
+
+export const grimoireSnapshotSchema = z.object({
+  lists: z.array(grimoireSchema),
+  namedGrimoires: z.array(grimoireWithCountSchema),
+  reserved: grimoireWithCountSchema,
+  totalUnique: z.number().int().nonnegative(),
+  associations: z.array(savedSpellSchema),
+});
+
+export type GrimoireSnapshot = z.infer<typeof grimoireSnapshotSchema>;
+
+export const spellSelectionRequestSchema = z.object({
+  magiaId: z.uuid(),
+  grimoireIds: z.array(z.uuid()).max(50),
+  withoutGrimoire: z.boolean(),
+});
+
+export type SpellSelection = {
+  grimoireIds: string[];
+  withoutGrimoire: boolean;
+};
 
 export const magiaCacheSchema = z.object({
   magiaId: z.uuid(),
@@ -35,8 +64,4 @@ export const magiaCacheSchema = z.object({
 
 export type MagiaCache = z.infer<typeof magiaCacheSchema>;
 
-export type GrimoireWithCount = Grimoire & {
-  total: number;
-};
-
-export type SavedCollectionSelection = "todas" | typeof RESERVED_GRIMOIRE_ID | string;
+export type SavedCollectionSelection = "todas" | string;

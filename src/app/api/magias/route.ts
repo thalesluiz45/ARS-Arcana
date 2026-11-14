@@ -1,21 +1,13 @@
 import type { NextRequest } from "next/server";
 
+import { jsonResponse } from "@/lib/api-response";
 import { catalogRepository } from "@/lib/catalog/repository";
 import { describeCatalogFailure } from "@/lib/catalog/errors";
 import { parseCatalogFilters } from "@/lib/validation/catalog";
-import { magiaIdSchema } from "@/lib/validation/magia";
+import { spellIdSchema } from "@/lib/validation/spell";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const JSON_HEADERS = {
-  "content-type": "application/json; charset=utf-8",
-  "cache-control": "no-store",
-};
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -24,9 +16,9 @@ export async function GET(request: NextRequest) {
   try {
     if (rawIds !== null) {
       const ids = [...new Set(rawIds.split(",").map((id) => id.trim()).filter(Boolean))];
-      const parsed = magiaIdSchema.array().max(100).safeParse(ids);
+      const parsed = spellIdSchema.array().max(100).safeParse(ids);
       if (!parsed.success) {
-        return json(
+        return jsonResponse(
           {
             error:
               "A lista de IDs é inválida. Envie até 100 UUIDs separados por vírgula.",
@@ -36,16 +28,16 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const spells = await catalogRepository.listarMagiasPorIds(parsed.data);
-      return json(spells);
+      const spells = await catalogRepository.listSpellsByIds(parsed.data);
+      return jsonResponse(spells);
     }
 
     const filters = parseCatalogFilters(searchParams);
-    const page = await catalogRepository.buscarMagias(filters);
-    return json(page);
+    const page = await catalogRepository.searchSpells(filters);
+    return jsonResponse(page);
   } catch (error) {
     const failure = describeCatalogFailure(error);
     console.error("[api/magias] falha ao consultar o catálogo:", error);
-    return json({ error: failure.message, code: failure.code }, failure.status);
+    return jsonResponse({ error: failure.message, code: failure.code }, failure.status);
   }
 }

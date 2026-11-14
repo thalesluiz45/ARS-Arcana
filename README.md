@@ -18,9 +18,36 @@ O ARS Arcana é um website desenvolvido para reunir e organizar as magias de Dun
 
 - **Informações detalhadas:** consulte informações como tempo de conjuração, alcance, duração e componentes.
 
-- **Magias salvas:** marque suas magias favoritas para encontrá-las facilmente.
+- **Magias salvas:** entre com Google para guardar suas magias favoritas na sua conta.
 
-- **Grimório pessoal:** organize suas magias favoritas para utilizar durante suas sessões.
+- **Grimório pessoal:** organize suas magias em grimórios sincronizados entre dispositivos.
+
+- **Catálogo de equipamentos:** consulte os 174 itens — armas, armaduras, ferramentas e itens de aventura — com busca, filtros por categoria e ordenação.
+
+- **Detalhes por subtipo:** veja dano, propriedades e maestria das armas; proteção e requisitos das armaduras; atributos das ferramentas; descrição, peso, custo e página de origem de cada item.
+
+- **Arsenal:** entre com Google para salvar equipamentos na sua conta e consultá-los em qualquer dispositivo.
+
+- **Conta:** acesse Magias Salvas, Arsenal e saia da conta pelo menu do cabeçalho.
+
+## Autenticação
+
+O login usa exclusivamente Google OAuth (Auth.js) com sessões de servidor
+revogáveis. Usuários, contas Google, sessões, grimórios e Arsenal ficam no
+PostgreSQL; a Biblioteca, os detalhes das magias e o catálogo de equipamentos
+continuam públicos.
+
+1. Crie credenciais OAuth do tipo **Aplicativo da Web** no Google Cloud Console.
+2. Cadastre `http://localhost:3000/api/auth/callback/google` como URL de
+   redirecionamento autorizada em desenvolvimento (e a URL equivalente em
+   produção).
+3. Preencha `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `AUTH_SECRET` no
+   `.env.local`, conforme `.env.example`.
+4. Aplique as migrações com `npm run db:migrate` antes de iniciar a aplicação.
+
+Os grimórios antigos salvos no IndexedDB não são importados. Se existirem, a
+tela de login pede confirmação explícita e só os apaga depois de um login
+bem-sucedido; o cache de detalhes das magias (`cache_magias`) é preservado.
 
 ## Sobre o projeto
 

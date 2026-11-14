@@ -106,10 +106,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    background-image:
-      radial-gradient(circle at 14% 12%, rgb(200 163 90 / 0.06), transparent 32rem),
-      radial-gradient(circle at 86% 72%, rgb(22 63 53 / 0.045), transparent 38rem);
+    background: var(--background);
   }
 
   h1,
@@ -157,7 +154,13 @@
   }
 
   .ornament-line {
-    background: linear-gradient(90deg, transparent, var(--border) 18%, var(--border) 82%, transparent);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--border) 18%,
+      var(--border) 82%,
+      transparent
+    );
   }
 
   .skip-link {
