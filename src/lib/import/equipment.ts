@@ -164,6 +164,7 @@ const UPSERT_SQL = `
     tipo_dano,
     propriedades,
     maestria,
+    maestria_descricao,
     classe_armadura,
     forca,
     furtividade,
@@ -177,7 +178,7 @@ const UPSERT_SQL = `
   )
   VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
-    $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
   )
   ON CONFLICT (slug) DO UPDATE SET
     nome = EXCLUDED.nome,
@@ -187,6 +188,7 @@ const UPSERT_SQL = `
     tipo_dano = EXCLUDED.tipo_dano,
     propriedades = EXCLUDED.propriedades,
     maestria = EXCLUDED.maestria,
+    maestria_descricao = EXCLUDED.maestria_descricao,
     classe_armadura = EXCLUDED.classe_armadura,
     forca = EXCLUDED.forca,
     furtividade = EXCLUDED.furtividade,
@@ -215,6 +217,7 @@ function equipmentColumns(item: Equipment): unknown[] {
       item.tipoDano,
       item.propriedades,
       item.maestria,
+      item.maestriaDescricao,
       null,
       null,
       null,
@@ -237,6 +240,7 @@ function equipmentColumns(item: Equipment): unknown[] {
       null,
       null,
       [],
+      null,
       null,
       item.classeArmadura,
       item.forca,
@@ -264,6 +268,7 @@ function equipmentColumns(item: Equipment): unknown[] {
       null,
       null,
       null,
+      null,
       item.atributo,
       item.descricao,
       item.peso,
@@ -282,6 +287,7 @@ function equipmentColumns(item: Equipment): unknown[] {
     null,
     null,
     [],
+    null,
     null,
     null,
     null,

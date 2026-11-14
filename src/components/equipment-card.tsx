@@ -62,6 +62,15 @@ function WeaponBody({ equipment }: { equipment: WeaponEquipment }) {
         <Stat label="Peso" value={equipmentPesoLabel(equipment)} />
         <Stat label="Custo" value={equipment.custo} />
       </dl>
+
+      <div className="mt-4 rounded-sm border border-gold/25 bg-parchment/60 px-3 py-2.5">
+        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-[#7d5e2a]">
+          Maestria · {equipment.maestria}
+        </p>
+        <p className="mt-1.5 text-[0.76rem] leading-relaxed text-[#3d4a43]">
+          {equipment.maestriaDescricao}
+        </p>
+      </div>
     </>
   );
 }

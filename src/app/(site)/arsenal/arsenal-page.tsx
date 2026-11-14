@@ -51,6 +51,7 @@ function searchHaystacks(equipment: Equipment): string[] {
       equipment.dano,
       equipment.tipoDano,
       equipment.maestria,
+      equipment.maestriaDescricao,
       ...equipment.propriedades,
     );
   }

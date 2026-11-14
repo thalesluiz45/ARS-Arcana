@@ -30,8 +30,8 @@ export class MochilaRepositoryError extends Error {
 }
 
 const EQUIPMENT_COLUMNS = `slug, nome, tipo, categoria, dano, tipo_dano, propriedades,
-  maestria, classe_armadura, forca, furtividade, atributo, descricao, peso, custo,
-  fonte_pagina`;
+  maestria, maestria_descricao, classe_armadura, forca, furtividade, atributo,
+  descricao, peso, custo, fonte_pagina`;
 
 const TYPE_RANK = (alias: string) => `CASE ${alias}.tipo
   WHEN 'arma' THEN 0

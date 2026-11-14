@@ -137,6 +137,15 @@ function WeaponDetails({
           </p>
         )}
       </div>
+
+      <div className="mt-6 rounded-md border border-gold/25 bg-parchment/60 px-4 py-4">
+        <h3 className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-[#7d5e2a]">
+          Maestria · {equipment.maestria}
+        </h3>
+        <p className="mt-2 text-[0.92rem] leading-relaxed text-[#3d4a43]">
+          {equipment.maestriaDescricao}
+        </p>
+      </div>
     </article>
   );
 }

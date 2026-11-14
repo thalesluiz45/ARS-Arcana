@@ -41,6 +41,7 @@ export function mapEquipmentRow(row: DatabaseRow): Equipment {
         tipoDano: row.tipo_dano,
         propriedades: toStringArray(row.propriedades),
         maestria: row.maestria,
+        maestriaDescricao: row.maestria_descricao,
       });
     case "armadura":
       return armorEquipmentSchema.parse({

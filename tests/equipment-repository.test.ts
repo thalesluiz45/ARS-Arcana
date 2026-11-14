@@ -21,6 +21,7 @@ const MIGRATION_FILES = [
   "002_auth_and_grimoires.sql",
   "003_equipment_and_arsenal.sql",
   "004_mochilas.sql",
+  "005_equipment_maestria_descricao.sql",
 ];
 
 let handle: PgliteHandle;
